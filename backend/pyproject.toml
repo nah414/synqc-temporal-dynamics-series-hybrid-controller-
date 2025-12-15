@@ -1,0 +1,22 @@
+[project]
+name = "synqc-tds-backend"
+version = "0.1.0"
+description = "Backend API and engine for SynQc Temporal Dynamics Series (SynQc TDS) console."
+requires-python = ">=3.12"
+authors = [{name = "Adam & Nova (eVision)"}]
+
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "pydantic>=2.9.0",
+    "numpy>=2.0.0"
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.synqc]
+# Custom section to remind future us about safety and design choices.
+max_shots_per_experiment = 200000
+max_shots_per_session = 1000000
