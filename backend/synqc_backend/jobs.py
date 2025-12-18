@@ -49,6 +49,11 @@ class JobQueue:
             self._futures[job_id] = future
         return record
 
+    def shutdown(self, timeout: float | None = None) -> None:
+        """Attempt a graceful shutdown so in-flight jobs can finish."""
+
+        self._executor.shutdown(wait=True, timeout=timeout)
+
     def _run_job(self, record: JobRecord, session_id: str) -> None:
         with self._lock:
             record.status = JobStatus.RUNNING

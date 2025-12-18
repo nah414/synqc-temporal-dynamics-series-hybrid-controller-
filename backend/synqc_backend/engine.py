@@ -67,6 +67,9 @@ class SynQcEngine:
 
     def run_experiment(self, req: RunExperimentRequest, session_id: str) -> RunExperimentResponse:
         """Run a high-level SynQc experiment according to the request."""
+        if (not settings.allow_remote_hardware) and req.hardware_target != "sim_local":
+            raise ValueError("Remote hardware is disabled in this deployment")
+
         effective_shot_budget, warn_for_target = self._apply_shot_guardrails(req, session_id)
 
         backend = get_backend(req.hardware_target)

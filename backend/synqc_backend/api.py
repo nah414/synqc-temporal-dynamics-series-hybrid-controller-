@@ -5,6 +5,7 @@ from typing import List
 
 from fastapi import Depends, FastAPI, Header, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
+import atexit
 
 from .budget import BudgetTracker
 from .config import settings
@@ -40,9 +41,11 @@ metrics_exporter = MetricsExporter(
     queue=queue,
     enabled=settings.enable_metrics,
     port=settings.metrics_port,
+    bind_address=settings.metrics_bind_address,
     collection_interval_seconds=settings.metrics_collection_interval_seconds,
 )
 metrics_exporter.start()
+atexit.register(queue.shutdown, timeout=settings.job_graceful_shutdown_seconds)
 
 app = FastAPI(
     title="SynQc Temporal Dynamics Series Backend",
@@ -193,6 +196,17 @@ def run_experiment(
 
 
 def _enqueue_run(req: RunExperimentRequest, session_id: str) -> RunSubmissionResponse:
+    if (not settings.allow_remote_hardware) and req.hardware_target != "sim_local":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Remote hardware is disabled on this deployment",
+        )
+    if req.hardware_target not in list_backends():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unknown hardware_target '{req.hardware_target}'",
+        )
+
     record = queue.enqueue(req, session_id)
     return RunSubmissionResponse(
         id=record.id,

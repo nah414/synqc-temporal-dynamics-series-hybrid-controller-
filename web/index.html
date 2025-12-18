@@ -1198,6 +1198,15 @@
     }
 
     const API_BASE = defaultApiBase();
+    const API_KEY = (() => {
+      const params = new URLSearchParams(window.location.search);
+      const fromParam = params.get('api_key') || params.get('key');
+      if (fromParam) {
+        try { localStorage.setItem('synqc_api_key', fromParam); } catch (_) { /* ignore */ }
+        return fromParam;
+      }
+      try { return localStorage.getItem('synqc_api_key'); } catch (_) { return null; }
+    })();
 
     let MAX_SHOTS_PER_EXPERIMENT = 200000;
     let DEFAULT_SHOT_BUDGET = 2048;
@@ -1214,7 +1223,10 @@
     }
 
     async function apiGet(path) {
-      const res = await fetch(API_BASE + path, { method: 'GET' });
+      const res = await fetch(API_BASE + path, {
+        method: 'GET',
+        headers: API_KEY ? { 'X-Api-Key': API_KEY } : {},
+      });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return await res.json();
     }
@@ -1222,7 +1234,10 @@
     async function apiPost(path, payload) {
       const res = await fetch(API_BASE + path, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: Object.assign(
+          { 'Content-Type': 'application/json' },
+          API_KEY ? { 'X-Api-Key': API_KEY } : {}
+        ),
         body: JSON.stringify(payload),
       });
       if (!res.ok) {

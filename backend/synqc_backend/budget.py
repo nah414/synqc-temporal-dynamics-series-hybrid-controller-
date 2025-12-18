@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import threading
+import time
 from typing import Dict, Tuple
 
 import redis
@@ -40,7 +41,7 @@ class BudgetTracker:
         self._redis_url = redis_url
         self._session_ttl_seconds = session_ttl_seconds
         self._lock = threading.Lock()
-        self._in_memory_usage: dict[str, int] = {}
+        self._in_memory_usage: dict[str, tuple[int, float]] = {}
         self._client = redis.Redis.from_url(redis_url) if redis_url else None
         self._reserve_script = (
             self._client.register_script(self._LUA_RESERVE) if self._client else None
@@ -62,11 +63,12 @@ class BudgetTracker:
             return bool(accepted), int(usage)
 
         with self._lock:
-            current = self._in_memory_usage.get(session_id, 0)
+            self._evict_expired_locked()
+            current, _ = self._in_memory_usage.get(session_id, (0, time.time()))
             new_total = current + requested
             if new_total > max_shots_per_session:
                 return False, current
-            self._in_memory_usage[session_id] = new_total
+            self._in_memory_usage[session_id] = (new_total, time.time())
             return True, new_total
 
     def _session_key(self, session_id: str) -> str:
@@ -95,6 +97,7 @@ class BudgetTracker:
                 }
 
         with self._lock:
+            self._evict_expired_locked()
             return {
                 "backend": "memory",
                 "session_keys": len(self._in_memory_usage),
@@ -103,9 +106,19 @@ class BudgetTracker:
 
     def _count_session_keys(self) -> int:
         if not self._client:
+            self._evict_expired_locked()
             return len(self._in_memory_usage)
 
         count = 0
         for _ in self._client.scan_iter(match="synqc:session:*:shots", count=200):
             count += 1
         return count
+
+    def _evict_expired_locked(self) -> None:
+        """Remove expired in-memory session entries (lock must be held)."""
+
+        now = time.time()
+        ttl = self._session_ttl_seconds
+        expired = [sid for sid, (_, ts) in self._in_memory_usage.items() if now - ts >= ttl]
+        for sid in expired:
+            self._in_memory_usage.pop(sid, None)

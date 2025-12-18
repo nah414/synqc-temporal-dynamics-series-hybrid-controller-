@@ -42,13 +42,24 @@ class SynQcSettings(BaseSettings):
     )
     session_budget_ttl_seconds: int = Field(default=3600, ge=60)
     worker_pool_size: int = Field(default=4, ge=1)
+    job_graceful_shutdown_seconds: int = Field(default=5, ge=0)
 
     # Metrics / observability
     enable_metrics: bool = Field(
         default=True, description="Expose Prometheus metrics for queue and budget health"
     )
     metrics_port: int = Field(default=9000, ge=1, le=65535)
+    metrics_bind_address: str = Field(
+        default="127.0.0.1",
+        description="Interface to bind the Prometheus exporter (use 0.0.0.0 only when intentionally exposed)",
+    )
     metrics_collection_interval_seconds: int = Field(default=15, ge=5)
+
+    # Provider backends
+    allow_provider_simulation: bool = Field(
+        default=False,
+        description="Allow provider backends to run in simulation mode. Keep disabled unless explicitly desired.",
+    )
 
     @field_validator("cors_allow_origins", mode="before")
     @classmethod
