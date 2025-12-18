@@ -1,5 +1,12 @@
-const { test, expect } = require('@playwright/test');
+const { test, expect, chromium } = require('@playwright/test');
 const path = require('path');
+const fs = require('fs');
+
+const envExecutable = process.env.CHROMIUM_PATH || process.env.PLAYWRIGHT_CHROMIUM_PATH;
+const chromiumPath = envExecutable || chromium.executablePath();
+const chromiumExists = chromiumPath && fs.existsSync(chromiumPath);
+
+test.skip(!chromiumExists, 'Chromium binary unavailable; skipping UI smoke until browsers are installed.');
 
 test('UI smoke: nav, API key, alerts, and tables', async ({ page }) => {
   const apiBase = 'http://localhost:9999';

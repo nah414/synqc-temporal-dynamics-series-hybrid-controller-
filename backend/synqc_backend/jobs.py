@@ -12,6 +12,7 @@ from .models import (
     KpiBundle,
     RunExperimentRequest,
     RunExperimentResponse,
+    WorkflowStep,
 )
 from .storage import ExperimentStore
 
@@ -100,6 +101,22 @@ class JobQueue:
             notes=req.notes,
             control_profile=req.control_overrides,
             error_detail=record.error_detail,
+            workflow_trace=[
+                WorkflowStep(
+                    id="ingest",
+                    label="Ingest",
+                    description="Submission rejected before execution; see error_detail.",
+                    percent_complete=20,
+                    dwell_ms=300,
+                ),
+                WorkflowStep(
+                    id="commit",
+                    label="Guardrail",
+                    description="Budget/validation guardrail halted the workflow.",
+                    percent_complete=100,
+                    dwell_ms=300,
+                ),
+            ],
         )
         try:
             self._store.add(run)

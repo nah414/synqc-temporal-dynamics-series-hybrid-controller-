@@ -53,6 +53,22 @@ class KpiBundle(BaseModel):
     )
 
 
+class WorkflowStep(BaseModel):
+    """Lightweight progress descriptor for the orchestration graph."""
+
+    id: str = Field(description="Stable identifier for the workflow node")
+    label: str = Field(description="User-visible label for the node")
+    description: str = Field(description="Plain-language context for this stage")
+    percent_complete: float = Field(
+        default=0.0,
+        description="Cumulative completion percentage when this node is lit.",
+    )
+    dwell_ms: int = Field(
+        default=450,
+        description="Suggested dwell time for UI animation of this node.",
+    )
+
+
 class HardwareTarget(BaseModel):
     """Description of a hardware backend target."""
 
@@ -94,6 +110,10 @@ class RunExperimentResponse(BaseModel):
     notes: Optional[str] = None
     control_profile: Optional[ControlProfile] = None
     error_detail: Optional[dict] = None
+    workflow_trace: List[WorkflowStep] = Field(
+        default_factory=list,
+        description="Ordered set of orchestration nodes that activated during the run.",
+    )
 
 
 class RunJobStatus(str, Enum):

@@ -17,6 +17,10 @@
       --kpi-good: #2ecc71;
       --kpi-warn: #ffb94d;
       --kpi-bad: #ff4d6a;
+      --spectral-shift: 0deg;
+      --mobius-glass: rgba(132, 196, 255, 0.22);
+      --mobius-highlight: rgba(180, 236, 255, 0.55);
+      --mobius-shadow: rgba(35, 55, 105, 0.6);
       --tracer-duration: 18s;
     }
     * { box-sizing: border-box; }
@@ -49,89 +53,139 @@
       justify-content: center;
       pointer-events: none;
       z-index: 0;
-      opacity: 0.82;
+      opacity: 0.92;
       mix-blend-mode: screen;
-      filter: saturate(1.15);
+      perspective: 1400px;
     }
     .mobius-wrap{
       position: relative;
-      width: 520px;
-      height: 320px;
+      width: 620px;
+      height: 380px;
+      transform-style: preserve-3d;
       filter:
-        drop-shadow(0 0 18px rgba(255,100,120,0.26))
-        drop-shadow(0 0 34px rgba(255,120,140,0.18));
+        drop-shadow(0 0 24px rgba(120, 200, 255, 0.15))
+        drop-shadow(0 0 48px rgba(120, 200, 255, 0.12))
+        drop-shadow(0 0 68px rgba(50, 80, 140, 0.18));
     }
-    .mobius-trace{
+    .mobius-band{
       position: absolute;
       inset: 0;
       border-radius: 50%;
       background:
-        radial-gradient(ellipse at center, rgba(255,120,140,0.25), rgba(255,120,140,0)),
-        radial-gradient(circle at 30% 70%, rgba(255,180,200,0.15), rgba(255,180,200,0));
-      opacity: 0.82;
-      box-shadow: inset 0 0 24px rgba(255,120,140,0.2);
+        conic-gradient(from 140deg, rgba(120, 200, 255, 0.12), rgba(120, 200, 255, 0.35), rgba(120, 200, 255, 0.14), rgba(140, 220, 255, 0.4), rgba(120, 200, 255, 0.12));
+      mask: radial-gradient(ellipse at center, transparent 35%, rgba(0,0,0,0.98) 42%, rgba(0,0,0,0.98) 74%, transparent 80%);
+      transform-style: preserve-3d;
+      transform: rotateX(64deg) rotateY(-4deg) rotateZ(24deg);
+      box-shadow:
+        inset 0 0 18px rgba(255, 255, 255, 0.12),
+        inset 0 18px 32px var(--mobius-shadow),
+        inset 0 -18px 32px rgba(10, 14, 38, 0.45);
+      mix-blend-mode: screen;
+      opacity: 0.9;
+    }
+    .mobius-band::after{
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      background:
+        radial-gradient(circle at 32% 40%, var(--mobius-highlight), transparent 42%),
+        radial-gradient(circle at 74% 68%, rgba(122, 194, 255, 0.35), transparent 45%),
+        conic-gradient(from 20deg, rgba(255,255,255,0.08), rgba(255,255,255,0.2), rgba(255,255,255,0.04));
+      mix-blend-mode: screen;
+      filter: blur(1px) saturate(1.15);
+      opacity: 0.88;
     }
     .mobius-path{
       position: absolute;
-      inset: 0;
-      background: conic-gradient(from 90deg, rgba(255,120,140,0.44), rgba(255,120,140,0.08), rgba(255,120,140,0.48), rgba(255,120,140,0.05));
-      filter: blur(8px);
-      opacity: 0.6;
-      transform: rotate(10deg);
+      inset: -14px;
+      border-radius: 50%;
+      background:
+        conic-gradient(from 60deg, rgba(110, 180, 255, 0.35), rgba(110, 180, 255, 0.08), rgba(180, 236, 255, 0.4), rgba(110, 180, 255, 0.08));
+      filter: blur(18px);
+      opacity: 0.65;
+      transform: rotateX(64deg) rotateZ(24deg);
+      mix-blend-mode: screen;
+    }
+    .mobius-trace{
+      position: absolute;
+      inset: 6px;
+      border-radius: 50%;
+      background:
+        radial-gradient(ellipse at 52% 48%, rgba(170, 230, 255, 0.3), rgba(170, 230, 255, 0)),
+        radial-gradient(circle at 38% 72%, rgba(80, 140, 255, 0.28), rgba(80, 140, 255, 0));
+      opacity: 0.78;
+      box-shadow: inset 0 0 22px rgba(130, 200, 255, 0.22);
+      transform: rotateX(64deg) rotateZ(24deg);
     }
     .mobius-trail{
       position: absolute;
       inset: 0;
       border-radius: 50%;
-      background: conic-gradient(from 45deg, rgba(255,140,160,0.24), rgba(255,90,120,0.0), rgba(255,140,160,0.34), rgba(255,90,120,0.0));
-      filter: blur(20px);
-      opacity: 0.55;
+      background:
+        conic-gradient(from 80deg, rgba(120, 200, 255, 0.2), rgba(60, 120, 255, 0.0), rgba(160, 220, 255, 0.26), rgba(60, 120, 255, 0));
+      filter: blur(26px);
+      opacity: 0.65;
       mix-blend-mode: screen;
-      mask-image: radial-gradient(circle at center, rgba(255,255,255,0.95), rgba(255,255,255,0));
+      mask-image: radial-gradient(circle at center, rgba(255,255,255,0.9), rgba(255,255,255,0));
+      transform: rotateX(64deg) rotateZ(24deg);
     }
     .mobius-particle, .mobius-tail{
       position: absolute;
-      width: 11px;
-      height: 11px;
+      width: 12px;
+      height: 12px;
       border-radius: 999px;
       background:
         radial-gradient(circle at 30% 30%, #fff7f9, rgba(255,255,255,0)),
-        radial-gradient(circle at 70% 70%, rgba(255,120,140,0.8), rgba(255,120,140,0));
+        radial-gradient(circle at 70% 70%, rgba(255,120,140,0.9), rgba(255,120,140,0));
       box-shadow:
-        0 0 14px rgba(255,120,140,0.9),
-        0 0 36px rgba(255,120,140,0.48),
-        0 0 60px rgba(255,120,140,0.24);
+        0 0 16px rgba(255,120,140,0.9),
+        0 0 40px rgba(255,120,140,0.55),
+        0 0 74px rgba(255,120,140,0.28);
       offset-path: path("M 210 130 C 300 30 420 230 210 260 C 0 230 120 30 210 130 Z");
-      offset-rotate: 0deg;
+      offset-rotate: auto 90deg;
       animation: mobiusOrbit 14s linear infinite;
       mix-blend-mode: screen;
       transform: translate(-50%, -50%);
     }
     .mobius-tail{
-      width: 14px;
-      height: 14px;
-      background: radial-gradient(circle at 30% 30%, rgba(255,180,190,0.95), rgba(255,120,140,0));
-      filter: blur(5px);
-      opacity: 0.8;
+      width: 42px;
+      height: 10px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, rgba(255,120,140,0.08) 0%, rgba(255,120,140,0.7) 60%, rgba(255,230,235,0.95) 100%);
+      filter: blur(4px);
+      opacity: 0.92;
       animation-duration: var(--tracer-duration, 18s);
-      animation-delay: -4s;
+      animation-delay: -3s;
+      box-shadow:
+        0 0 18px rgba(255,140,160,0.6),
+        0 0 38px rgba(255,120,140,0.35),
+        0 0 64px rgba(255,120,140,0.18);
     }
     .mobius-tail.tail-2{
-      width: 18px;
-      height: 18px;
-      filter: blur(9px);
-      opacity: 0.48;
-      animation-duration: calc(var(--tracer-duration, 18s) * 1.25);
+      width: 52px;
+      height: 13px;
+      filter: blur(7px);
+      opacity: 0.58;
+      animation-duration: calc(var(--tracer-duration, 18s) * 1.2);
       animation-delay: -8s;
     }
     .mobius-tail.tail-strong{
-      width: 26px;
-      height: 14px;
-      filter: blur(7px);
-      opacity: 0.9;
-      background: linear-gradient(90deg, rgba(255,180,190,0.95), rgba(255,120,140,0.1));
-      animation-duration: calc(var(--tracer-duration, 18s) * 0.85);
-      animation-delay: -2s;
+      width: 60px;
+      height: 16px;
+      filter: blur(6px);
+      opacity: 0.95;
+      background: linear-gradient(90deg, rgba(255,150,170,0.05), rgba(255,120,140,0.72), rgba(255,240,245,0.98));
+      animation-duration: calc(var(--tracer-duration, 18s) * 0.9);
+      animation-delay: -1.6s;
+      box-shadow:
+        0 0 24px rgba(255,120,140,0.7),
+        0 0 46px rgba(255,120,140,0.4),
+        0 0 84px rgba(255,120,140,0.18);
+    }
+    .spectralized {
+      filter: hue-rotate(var(--spectral-shift, 0deg)) saturate(1.06);
+      transition: filter 0.35s ease;
     }
     @keyframes mobiusOrbit{
       from { offset-distance: 0%; }
@@ -514,6 +568,138 @@
     .segment-drive2 { flex: 0.7; background: linear-gradient(to right, rgba(32,227,178,0.9), rgba(106,229,255,0.85)); }
     .segment-label { font-size: 0.7rem; color: var(--text-soft); }
     .scene-notes { font-size: 0.73rem; color: var(--text-soft); opacity: 0.85; line-height: 1.4; }
+
+    .neural-stack {
+      margin-top: 0.65rem;
+      border-radius: 14px;
+      border: 1px solid var(--border-subtle);
+      background: radial-gradient(circle at 18% 10%, rgba(106,229,255,0.12), transparent 45%),
+        radial-gradient(circle at 82% 86%, rgba(255,221,110,0.14), transparent 45%),
+        rgba(7,9,26,0.92);
+      padding: 0.65rem 0.75rem;
+      box-shadow: inset 0 0 18px rgba(255,255,255,0.03), 0 20px 45px rgba(0,0,0,0.55);
+    }
+    .neural-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .neural-title {
+      font-weight: 650;
+      letter-spacing: 0.02em;
+      font-size: 0.95rem;
+    }
+    .neural-progress {
+      font-size: 0.82rem;
+      color: var(--accent);
+      font-weight: 700;
+    }
+    .neural-web {
+      position: relative;
+      margin-top: 0.55rem;
+      height: 230px;
+      border-radius: 14px;
+      background:
+        linear-gradient(120deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.02) 36%, rgba(255,255,255,0.04) 72%, rgba(255,255,255,0.02) 100%),
+        radial-gradient(circle at 30% 40%, rgba(106,229,255,0.14), transparent 40%),
+        radial-gradient(circle at 70% 60%, rgba(255,221,110,0.16), transparent 55%),
+        rgba(4,6,20,0.98);
+      border: 1px solid rgba(255,255,255,0.06);
+      overflow: hidden;
+      perspective: 1200px;
+      transform-style: preserve-3d;
+      transform: rotateX(18deg) rotateY(-16deg);
+      box-shadow: inset 0 0 32px rgba(255,255,255,0.02), 0 14px 36px rgba(0,0,0,0.55);
+    }
+    .neural-web::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(90deg, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 2px, transparent 12px, transparent 16px),
+        repeating-linear-gradient(0deg, rgba(255,255,255,0.015) 0px, rgba(255,255,255,0.015) 2px, transparent 12px, transparent 16px);
+      opacity: 0.25;
+      pointer-events: none;
+    }
+    .neural-node {
+      position: absolute;
+      width: 16px;
+      height: 16px;
+      border-radius: 999px;
+      background:
+        radial-gradient(circle at 30% 30%, #ffffff, rgba(255,255,255,0)),
+        radial-gradient(circle at 70% 70%, rgba(106,229,255,0.9), rgba(106,229,255,0));
+      box-shadow:
+        0 0 12px rgba(106,229,255,0.75),
+        0 0 32px rgba(106,229,255,0.4);
+      transform: translate3d(var(--x, 0px), var(--y, 0px), var(--z, 0px));
+      transition: transform 0.4s ease, box-shadow 0.3s ease, opacity 0.3s ease;
+      opacity: 0.62;
+    }
+    .neural-node .node-label {
+      position: absolute;
+      top: 18px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.68rem;
+      color: var(--text-soft);
+      white-space: nowrap;
+      pointer-events: none;
+      text-shadow: 0 1px 6px rgba(0,0,0,0.65);
+    }
+    .neural-node.active {
+      opacity: 1;
+      box-shadow:
+        0 0 14px rgba(255,221,110,0.9),
+        0 0 40px rgba(255,221,110,0.5),
+        0 0 78px rgba(106,229,255,0.35);
+      transform: translate3d(var(--x, 0px), var(--y, 0px), var(--z, 0px)) scale(1.08);
+    }
+    .neural-node.completed {
+      opacity: 1;
+      box-shadow:
+        0 0 16px rgba(106,229,255,0.95),
+        0 0 50px rgba(106,229,255,0.45),
+        0 0 90px rgba(255,221,110,0.28);
+    }
+    .neural-link {
+      position: absolute;
+      height: 2px;
+      background: linear-gradient(to right, rgba(106,229,255,0.0), rgba(106,229,255,0.8), rgba(255,221,110,0.85));
+      opacity: 0.45;
+      box-shadow: 0 0 10px rgba(106,229,255,0.35);
+      transform-origin: 0 50%;
+      transition: opacity 0.3s ease, box-shadow 0.3s ease;
+    }
+    .neural-link.active {
+      opacity: 0.9;
+      box-shadow: 0 0 14px rgba(255,221,110,0.85);
+    }
+    .neural-context {
+      margin-top: 0.55rem;
+      border-radius: 12px;
+      padding: 0.55rem 0.65rem;
+      background: rgba(5,6,20,0.9);
+      border: 1px solid rgba(255,255,255,0.08);
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+    }
+    .context-chip {
+      padding: 0.14rem 0.5rem;
+      border-radius: 999px;
+      background: linear-gradient(to right, rgba(106,229,255,0.35), rgba(255,221,110,0.35));
+      border: 1px solid rgba(255,255,255,0.08);
+      font-size: 0.72rem;
+      color: #0a0d20;
+      font-weight: 700;
+    }
+    .context-body {
+      font-size: 0.82rem;
+      color: var(--text-main);
+      line-height: 1.35;
+    }
     .panel-history { grid-area: history; display: flex; flex-direction: column; gap: 0.6rem; }
     .history-filters {
       display: flex; flex-wrap: wrap; gap: 0.35rem; font-size: 0.72rem;
@@ -830,9 +1016,10 @@
 </head>
 <body>
   <div class="app">
-    <div class="particle-layer" id="particleLayer"></div>
-    <div class="mobius-layer" aria-hidden="true">
+    <div class="particle-layer spectralized" id="particleLayer"></div>
+    <div class="mobius-layer spectralized" aria-hidden="true">
       <div class="mobius-wrap">
+        <div class="mobius-band"></div>
         <div class="mobius-path"></div>
         <div class="mobius-trace"></div>
         <div class="mobius-trail"></div>
@@ -990,10 +1177,10 @@
           </div>
         </div>
         <div class="scene-main">
-          <div class="scene-visual">
+          <div class="scene-visual spectralized">
             <div class="dpd-label">Drive · Probe · Drive</div>
             <div class="bloch-wrapper">
-              <div class="bloch-sphere" aria-label="Bloch sphere state visualization">
+              <div class="bloch-sphere spectralized" aria-label="Bloch sphere state visualization">
                 <div class="bloch-atmosphere" id="blochAtmosphere" aria-hidden="true"></div>
                 <div class="bloch-noise" id="blochNoise" aria-hidden="true"></div>
                 <div class="bloch-ring ring-a" id="blochRingA" aria-hidden="true"></div>
@@ -1012,13 +1199,28 @@
                 <div class="bloch-orbit-dot" id="blochOrbitDot" aria-hidden="true"></div>
               </div>
             </div>
+
+            <div class="neural-stack spectralized" aria-label="SynQc orchestration neural network">
+              <div class="neural-head">
+                <div>
+                  <div class="panel-sub">Neural orchestrator</div>
+                  <div class="neural-title">Temporal dynamics workflow</div>
+                </div>
+                <div class="neural-progress" id="workflowProgressValue">0%</div>
+              </div>
+              <div class="neural-web" id="neuralWeb" aria-hidden="true"></div>
+              <div class="neural-context">
+                <div class="context-chip">Live context</div>
+                <div class="context-body" id="workflowContext">Waiting for the next SynQc run…</div>
+              </div>
+            </div>
             <div class="scene-notes">
               This visualization represents the effective state of a single qubit under a SynQc
               Drive–Probe–Drive (DPD) protocol. The moving point suggests how your combined drive,
               probe, and feedback operations move the state on (and off) the Bloch sphere in time.
             </div>
           </div>
-          <div class="scene-timeline">
+          <div class="scene-timeline spectralized">
             <div>
               <strong>Temporal sequence</strong>
               <div class="panel-sub">
@@ -1159,11 +1361,11 @@
           </div>
           <div class="control-card">
             <div class="control-head">
-              <div>Tracer persistence</div>
-              <div class="control-value" id="tracerPersistenceValue">420 ms</div>
+              <div>Color spectrum shift</div>
+              <div class="control-value" id="spectralShiftValue">0°</div>
             </div>
-            <input type="range" min="50" max="5000" step="10" value="420" id="tracerPersistenceInput" class="control-slider" aria-label="Tracer persistence (ms)" />
-            <div class="panel-sub">Controls how long tails remain visible on the Mobius tracer.</div>
+            <input type="range" min="-180" max="180" step="1" value="0" id="spectralShiftInput" class="control-slider" aria-label="Color spectrum hue shift (°)" />
+            <div class="panel-sub">Hue-rotates all animated layers together for quick palette testing.</div>
           </div>
           <div class="control-card">
             <div class="control-head">
@@ -1418,6 +1620,10 @@
     const presetSelect = document.getElementById('presetSelect');
     const sceneInterpretation = document.getElementById('sceneInterpretation');
 
+    const neuralWeb = document.getElementById('neuralWeb');
+    const workflowContext = document.getElementById('workflowContext');
+    const workflowProgressValue = document.getElementById('workflowProgressValue');
+
     const shotInput = document.getElementById('shotInput');
     const shotLabel = document.getElementById('shotLabel');
     const notesInput = document.getElementById('notesInput');
@@ -1464,8 +1670,8 @@
     const feedbackGainValue = document.getElementById('feedbackGainValue');
     const safetyClampInput = document.getElementById('safetyClampInput');
     const safetyClampValue = document.getElementById('safetyClampValue');
-    const tracerPersistenceInput = document.getElementById('tracerPersistenceInput');
-    const tracerPersistenceValue = document.getElementById('tracerPersistenceValue');
+    const spectralShiftInput = document.getElementById('spectralShiftInput');
+    const spectralShiftValue = document.getElementById('spectralShiftValue');
     const thermalGuardToggle = document.getElementById('thermalGuardToggle');
     const controlNotesInput = document.getElementById('controlNotesInput');
     const applyControlsBtn = document.getElementById('applyControlsBtn');
@@ -1522,6 +1728,9 @@
     let healthCache = null;
 
     let controlProfileCache = null;
+
+    let activeWorkflowTrace = [];
+    let workflowTimers = [];
 
     let selectedExperimentId = null;
 
@@ -1625,8 +1834,9 @@
       return `${Number(ns || 0).toLocaleString()} ns`;
     }
 
-    function fmtMs(ms) {
-      return `${Number(ms || 0).toLocaleString()} ms`;
+    function fmtDeg(deg) {
+      const n = Number(deg || 0);
+      return `${n > 0 ? '+' : ''}${n.toFixed(0)}°`;
     }
 
     function summarizeControlProfile(profile) {
@@ -1638,12 +1848,23 @@
       return `drive ${drive} · gain ${gain} · clamp ${clamp} · ${guard}`;
     }
 
-    function setTracerPersistence(ms) {
-      if (!Number.isFinite(ms)) return;
-      const clamped = Math.max(50, Math.min(ms, 5000));
-      const duration = 12 + (clamped / 5000) * 14; // 12–26s
-      document.documentElement.style.setProperty('--tracer-duration', `${duration.toFixed(1)}s`);
-      if (tracerPersistenceValue) tracerPersistenceValue.textContent = fmtMs(clamped);
+    function setSpectralShift(deg) {
+      if (!Number.isFinite(deg)) return;
+      const clamped = Math.max(-180, Math.min(deg, 180));
+      document.documentElement.style.setProperty('--spectral-shift', `${clamped}deg`);
+      if (spectralShiftValue) spectralShiftValue.textContent = fmtDeg(clamped);
+      try { localStorage.setItem('synqc_spectral_shift', String(clamped)); } catch (_) { /* ignore */ }
+    }
+
+    function hydrateSpectralShiftFromStorage() {
+      let stored = null;
+      try { stored = Number(localStorage.getItem('synqc_spectral_shift')); } catch (_) { /* ignore */ }
+      if (Number.isFinite(stored)) {
+        if (spectralShiftInput) spectralShiftInput.value = String(stored);
+        setSpectralShift(stored);
+      } else if (spectralShiftInput) {
+        setSpectralShift(Number(spectralShiftInput.value || 0));
+      }
     }
 
     function applyControlProfileToUi(profile) {
@@ -1665,13 +1886,8 @@
         safetyClampInput.value = profile.safety_clamp_ns ?? 600;
         safetyClampValue.textContent = fmtNs(profile.safety_clamp_ns ?? 0);
       }
-      if (tracerPersistenceInput) {
-        tracerPersistenceInput.value = profile.tracer_persistence_ms ?? 420;
-        tracerPersistenceValue.textContent = fmtMs(profile.tracer_persistence_ms ?? 420);
-      }
       if (thermalGuardToggle) thermalGuardToggle.checked = !!profile.thermal_guard_enabled;
       if (controlNotesInput) controlNotesInput.value = profile.notes || '';
-      setTracerPersistence(profile.tracer_persistence_ms ?? 420);
       if (controlMeta) {
         controlMeta.textContent = `drive=${Number(profile.drive_bias ?? 1).toFixed(2)} · feedback=${Number(profile.feedback_gain ?? 0).toFixed(2)} · clamp=${fmtNs(profile.safety_clamp_ns ?? 0)}`;
       }
@@ -1684,17 +1900,16 @@
         feedback_gain: Number(feedbackGainInput?.value || 0),
         safety_clamp_ns: Number(safetyClampInput?.value || 0),
         thermal_guard_enabled: Boolean(thermalGuardToggle?.checked),
-        tracer_persistence_ms: Number(tracerPersistenceInput?.value || 420),
         notes: (controlNotesInput?.value || '').trim() || null,
       };
     }
 
-    function wireControlInput(input, valueEl, formatter) {
+    function wireControlInput(input, valueEl, formatter, onChange) {
       if (!input || !valueEl) return;
       input.addEventListener('input', () => {
         const v = Number(input.value || 0);
         valueEl.textContent = formatter(v);
-        if (input === tracerPersistenceInput) setTracerPersistence(v);
+        if (typeof onChange === 'function') onChange(v);
       });
     }
 
@@ -1731,10 +1946,6 @@
       const fidelity = (kpis.fidelity == null) ? null : Number(kpis.fidelity);
       const latency = (kpis.latency_us == null) ? null : Number(kpis.latency_us);
       const backaction = (kpis.backaction == null) ? null : Number(kpis.backaction);
-
-      if (run?.control_profile?.tracer_persistence_ms) {
-        setTracerPersistence(Number(run.control_profile.tracer_persistence_ms));
-      }
 
       const atm = document.getElementById('blochAtmosphere');
       const noise = document.getElementById('blochNoise');
@@ -1779,6 +1990,148 @@
         const d = (idx === 0) ? dash : (dash * 1.2);
         p.style.animationDuration = `${d.toFixed(2)}s`;
       });
+    }
+
+    // --------------------------------------------
+    // Neural orchestration graph
+    // --------------------------------------------
+    function clearWorkflowTimers() {
+      workflowTimers.forEach(t => clearTimeout(t));
+      workflowTimers = [];
+    }
+
+    function setWorkflowContextText(text) {
+      if (workflowContext) workflowContext.textContent = text;
+    }
+
+    function defaultWorkflowTrace(run) {
+      const hw = run?.hardware_target ? hardwareNameForId(run.hardware_target) : hardwareNameForId(hardwareSelect.value);
+      const k = run?.kpis || {};
+      const fidelityText = Number.isFinite(Number(k.fidelity)) ? `Fidelity est. ${Number(k.fidelity).toFixed(3)}` : 'DPD synchronization';
+      const latencyText = Number.isFinite(Number(k.latency_us)) ? `${Number(k.latency_us).toFixed(1)} µs latency` : 'Latency sampling';
+      const backactionText = Number.isFinite(Number(k.backaction)) ? `Backaction ${Number(k.backaction).toFixed(2)}` : 'Probe stability sweep';
+      const standby = !run;
+      return [
+        { id: 'ingest', label: 'Ingest', description: standby ? `Standing by for the next SynQc run on ${hw}.` : `Budget + calibrations locked for ${hw}.`, percent_complete: 14, dwell_ms: 360 },
+        { id: 'shape', label: 'Drive shaping', description: standby ? 'Preloading composite drive templates.' : `Drive bias tuned to ${Number(driveBiasInput?.value || 1).toFixed(2)}x; guardrails ${thermalGuardToggle?.checked === false ? 'off' : 'on'}.`, percent_complete: 32, dwell_ms: 520 },
+        { id: 'probe', label: 'Probe', description: standby ? 'Probe window ready; waiting for execution trigger.' : `Mid-circuit probe at ${Number(probeWindowInput?.value || 120)} ns; feedback gain ${Number(feedbackGainInput?.value || 0).toFixed(2)}.`, percent_complete: 52, dwell_ms: 540 },
+        { id: 'adapt', label: 'Adapt', description: standby ? 'Adaptive feedback buffers armed.' : `Adapting DPD feedback with clamp ${Number(safetyClampInput?.value || 0).toLocaleString()} ns.`, percent_complete: 72, dwell_ms: 520 },
+        { id: 'infer', label: 'Infer', description: standby ? 'Neural estimator primed for incoming traces.' : `${fidelityText}. ${latencyText}.`, percent_complete: 88, dwell_ms: 620 },
+        { id: 'commit', label: 'Commit', description: standby ? 'Awaiting results to commit.' : `${backactionText}. Shot budget ${(k.shot_budget || shotInput?.value || DEFAULT_SHOT_BUDGET)}`, percent_complete: 100, dwell_ms: 700 },
+      ];
+    }
+
+    function normalizeWorkflowTrace(run) {
+      const provided = (run && Array.isArray(run.workflow_trace) && run.workflow_trace.length)
+        ? run.workflow_trace
+        : defaultWorkflowTrace(run);
+      return provided.map((step, idx) => {
+        const pct = Number.isFinite(Number(step.percent_complete))
+          ? Number(step.percent_complete)
+          : ((idx + 1) / provided.length) * 100;
+        const dwell = Number.isFinite(Number(step.dwell_ms)) ? Number(step.dwell_ms) : 480 + idx * 40;
+        return {
+          id: step.id || step.label || `step-${idx + 1}`,
+          label: step.label || step.id || `Stage ${idx + 1}`,
+          description: step.description || 'Workflow stage engaged.',
+          percent_complete: Math.min(100, Math.max(0, pct)),
+          dwell_ms: Math.max(140, dwell),
+        };
+      });
+    }
+
+    function renderNeuralNetwork(trace) {
+      if (!neuralWeb) return;
+      neuralWeb.innerHTML = '';
+      if (!trace || !trace.length) return;
+
+      const width = neuralWeb.clientWidth || 600;
+      const height = neuralWeb.clientHeight || 220;
+      const spacing = width / (trace.length + 1);
+      const baseY = height * 0.5;
+      const amplitude = height * 0.22;
+
+      let prev = null;
+      trace.forEach((step, idx) => {
+        const x = spacing * (idx + 1);
+        const y = baseY + Math.sin(idx * 1.18) * amplitude;
+        const z = (idx % 3) * 12;
+
+        if (prev) {
+          const dx = x - prev.x;
+          const dy = y - prev.y;
+          const length = Math.sqrt(dx * dx + dy * dy);
+          const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+          const link = document.createElement('div');
+          link.className = 'neural-link';
+          link.style.width = `${length}px`;
+          link.style.transform = `translate(${prev.x}px, ${prev.y}px) rotate(${angle}deg)`;
+          neuralWeb.appendChild(link);
+        }
+
+        const node = document.createElement('div');
+        node.className = 'neural-node';
+        node.dataset.stepId = step.id || `step-${idx + 1}`;
+        node.style.setProperty('--x', `${x}px`);
+        node.style.setProperty('--y', `${y}px`);
+        node.style.setProperty('--z', `${z}px`);
+        node.title = step.description || step.label || '';
+
+        const label = document.createElement('div');
+        label.className = 'node-label';
+        label.textContent = step.label || `Stage ${idx + 1}`;
+        node.appendChild(label);
+
+        neuralWeb.appendChild(node);
+        prev = { x, y };
+      });
+    }
+
+    function playWorkflowTrace(trace) {
+      if (!neuralWeb) return;
+      clearWorkflowTimers();
+      const nodes = Array.from(neuralWeb.querySelectorAll('.neural-node'));
+      const links = Array.from(neuralWeb.querySelectorAll('.neural-link'));
+      nodes.forEach(n => n.classList.remove('active', 'completed'));
+      links.forEach(l => l.classList.remove('active'));
+
+      if (!trace || !trace.length) {
+        setWorkflowContextText('Waiting for the next SynQc run…');
+        if (workflowProgressValue) workflowProgressValue.textContent = '0%';
+        return;
+      }
+
+      let cumulativeDelay = 200;
+      trace.forEach((step, idx) => {
+        const node = nodes[idx];
+        const link = idx > 0 ? links[idx - 1] : null;
+        const delay = Math.max(140, step.dwell_ms || 480);
+        const activate = () => {
+          if (link) link.classList.add('active');
+          if (node) {
+            node.classList.add('active');
+            requestAnimationFrame(() => node.classList.add('completed'));
+          }
+          setWorkflowContextText(step.description || step.label || 'Workflow stage engaged.');
+          const pct = Math.min(100, Math.max(0, Number.isFinite(step.percent_complete) ? Number(step.percent_complete) : ((idx + 1) / trace.length) * 100));
+          if (workflowProgressValue) workflowProgressValue.textContent = `${pct.toFixed(0)}%`;
+        };
+        workflowTimers.push(setTimeout(activate, cumulativeDelay));
+        cumulativeDelay += delay;
+      });
+
+      const finalStep = trace[trace.length - 1];
+      workflowTimers.push(setTimeout(() => {
+        const pct = Math.min(100, Math.max(0, Number(finalStep?.percent_complete ?? 100)));
+        if (workflowProgressValue) workflowProgressValue.textContent = `${pct.toFixed(0)}%`;
+        if (finalStep?.description) setWorkflowContextText(finalStep.description);
+      }, cumulativeDelay + 280));
+    }
+
+    function primeWorkflowFromRun(run) {
+      activeWorkflowTrace = normalizeWorkflowTrace(run);
+      renderNeuralNetwork(activeWorkflowTrace);
+      playWorkflowTrace(activeWorkflowTrace);
     }
 
     // --------------------------------------------
@@ -2113,6 +2466,10 @@
 
           // Experiments page table
           renderExperimentsTable();
+
+          if (!lastRun && recentRunsCache.length) {
+            primeWorkflowFromRun(recentRunsCache[0]);
+          }
         } catch (_) { /* ignore */ }
 
       } catch (err) {
@@ -2220,6 +2577,7 @@
 
         applyRunToKpis(run, CONSOLE_KPI_IDS);
         sceneInterpretation.textContent = deriveInterpretationFromRun(run);
+        primeWorkflowFromRun(run);
 
         // Refresh lists
         await refreshFromBackend();
@@ -2268,6 +2626,7 @@
           detailsControlProfile.textContent = `Active controls: ${summarizeControlProfile(run.control_profile)}`;
         }
         applyRunToKpis(run, DETAILS_KPI_IDS);
+        primeWorkflowFromRun(run);
         // Update cache entries so tables show error codes for legacy runs
         recentRunsCache = recentRunsCache.map(r => (r.id === run.id ? run : r));
         renderExperimentsTable();
@@ -2382,9 +2741,10 @@
     wireControlInput(probeWindowInput, probeWindowValue, fmtNs);
     wireControlInput(feedbackGainInput, feedbackGainValue, v => Number(v).toFixed(2));
     wireControlInput(safetyClampInput, safetyClampValue, fmtNs);
-    wireControlInput(tracerPersistenceInput, tracerPersistenceValue, fmtMs);
+    wireControlInput(spectralShiftInput, spectralShiftValue, fmtDeg, setSpectralShift);
     if (applyControlsBtn) applyControlsBtn.addEventListener('click', saveControlProfile);
     applyControlProfileToUi(collectControlPayload());
+    hydrateSpectralShiftFromStorage();
 
     hardwareSelect.addEventListener('change', () => {
       sceneHardwareLabel.textContent = hardwareSelect.options[hardwareSelect.selectedIndex]?.text || hardwareSelect.value;
@@ -2400,6 +2760,7 @@
     // --------------------------------------------
     // Boot
     // --------------------------------------------
+    primeWorkflowFromRun(lastRun);
     refreshFromBackend();
     updateInterpretationText();
   </script>
