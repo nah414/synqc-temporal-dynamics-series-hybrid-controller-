@@ -20,12 +20,14 @@ class MetricsExporter:
         queue,
         enabled: bool,
         port: int,
+        bind_address: str,
         collection_interval_seconds: int,
     ) -> None:
         self._budget_tracker = budget_tracker
         self._queue = queue
         self._enabled = enabled
         self._port = port
+        self._addr = bind_address
         self._interval = collection_interval_seconds
         self._stop_event = threading.Event()
         self._thread: Optional[threading.Thread] = None
@@ -86,7 +88,7 @@ class MetricsExporter:
             return
 
         try:
-            start_http_server(self._port)
+            start_http_server(self._port, addr=self._addr)
             logger.info(
                 "Started Prometheus metrics server", extra={"port": self._port}
             )

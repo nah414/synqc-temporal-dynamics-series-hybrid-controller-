@@ -5,6 +5,7 @@ from typing import List
 
 from fastapi import Depends, FastAPI, Header, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
+import atexit
 
 from .budget import BudgetTracker
 from .config import settings
@@ -34,15 +35,17 @@ budget_tracker = BudgetTracker(
     redis_url=settings.redis_url, session_ttl_seconds=settings.session_budget_ttl_seconds
 )
 engine = SynQcEngine(store=store, budget_tracker=budget_tracker)
-queue = JobQueue(engine.run_experiment, max_workers=settings.worker_pool_size)
+queue = JobQueue(engine.run_experiment, max_workers=settings.worker_pool_size, store=store)
 metrics_exporter = MetricsExporter(
     budget_tracker=budget_tracker,
     queue=queue,
     enabled=settings.enable_metrics,
     port=settings.metrics_port,
+    bind_address=settings.metrics_bind_address,
     collection_interval_seconds=settings.metrics_collection_interval_seconds,
 )
 metrics_exporter.start()
+atexit.register(queue.shutdown, timeout=settings.job_graceful_shutdown_seconds)
 
 app = FastAPI(
     title="SynQc Temporal Dynamics Series Backend",
@@ -172,6 +175,7 @@ def get_run_status(run_id: str, _: None = Depends(require_api_key)) -> RunStatus
         started_at=record.started_at,
         finished_at=record.finished_at,
         error=record.error,
+        error_detail=record.error_detail,
         result=record.result,
     )
 
@@ -193,6 +197,39 @@ def run_experiment(
 
 
 def _enqueue_run(req: RunExperimentRequest, session_id: str) -> RunSubmissionResponse:
+    if (not settings.allow_remote_hardware) and req.hardware_target != "sim_local":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "remote_hardware_disabled",
+                "message": "Remote hardware is disabled on this deployment",
+            },
+        )
+    backends = list_backends()
+    if req.hardware_target not in backends:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "unknown_hardware_target",
+                "message": f"Unknown hardware_target '{req.hardware_target}'",
+            },
+        )
+    backend = backends[req.hardware_target]
+    if (
+        backend.kind != "sim"
+        and not settings.allow_provider_simulation
+        and settings.allow_remote_hardware
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "provider_simulation_disabled",
+                "message": (
+                    "Provider simulation is disabled; enable SYNQC_ALLOW_PROVIDER_SIMULATION=true or use sim_local."
+                ),
+            },
+        )
+
     record = queue.enqueue(req, session_id)
     return RunSubmissionResponse(
         id=record.id,
