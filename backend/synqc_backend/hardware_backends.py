@@ -178,8 +178,9 @@ class ProviderBackend(BaseBackend):
 
         if not settings.allow_provider_simulation:
             raise RuntimeError(
-                "Provider backends are configured as simulation-only; set SYNQC_ALLOW_PROVIDER_SIMULATION=true "
-                "once live integrations are wired or use the local simulator."
+                "Provider simulation is disabled for this deployment. "
+                "To use simulator-only provider backends for testing, set SYNQC_ALLOW_PROVIDER_SIMULATION=true "
+                "or use the local simulator."
             )
 
         # Placeholder for live integration. In production deployments, swap this
