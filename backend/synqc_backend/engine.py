@@ -14,6 +14,7 @@ from .models import (
     KpiBundle,
     RunExperimentRequest,
     RunExperimentResponse,
+    WorkflowStep,
 )
 from .storage import ExperimentStore
 
@@ -103,6 +104,89 @@ class SynQcEngine:
 
         return adjusted
 
+    def _build_workflow_trace(
+        self,
+        req: RunExperimentRequest,
+        kpis: KpiBundle,
+        controls: ControlProfile,
+    ) -> list[WorkflowStep]:
+        """Generate a themed orchestration trace for UI visualization.
+
+        The UI uses these nodes to light the neural-style network and narrate
+        the orchestration story. Values are deterministic per request so the
+        front-end can map them directly to animation timing.
+        """
+
+        hardware = req.hardware_target
+        preset = req.preset.value.replace("_", " ")
+
+        base = [
+            WorkflowStep(
+                id="ingest",
+                label="Ingest",
+                description=f"Budget + calibrations locked for {hardware} ({preset}).",
+                percent_complete=12,
+                dwell_ms=420,
+            ),
+            WorkflowStep(
+                id="shape",
+                label="Drive shaping",
+                description=(
+                    "Synthesizing composite drive envelope with bias="
+                    f"{controls.drive_bias:.2f} and clamp={controls.safety_clamp_ns} ns."
+                ),
+                percent_complete=28,
+                dwell_ms=520,
+            ),
+            WorkflowStep(
+                id="probe",
+                label="Probe readout",
+                description=(
+                    "Mid-circuit probe window set to "
+                    f"{int(controls.probe_window_ns)} ns with feedback gain {controls.feedback_gain:.2f}."
+                ),
+                percent_complete=44,
+                dwell_ms=560,
+            ),
+            WorkflowStep(
+                id="adapt",
+                label="Adaptive drive",
+                description="Routing probe residuals into drive/feedback synthesis for stabilization.",
+                percent_complete=63,
+                dwell_ms=520,
+            ),
+            WorkflowStep(
+                id="infer",
+                label="Inference",
+                description="Neural estimator aggregates traces to derive fidelity/latency envelope.",
+                percent_complete=82,
+                dwell_ms=600,
+            ),
+        ]
+
+        final_note = ""
+        if kpis.fidelity is not None:
+            final_note += f"Fidelity ≈ {kpis.fidelity:.3f}. "
+        if kpis.latency_us is not None:
+            final_note += f"Latency ≈ {kpis.latency_us:.1f} µs. "
+        if kpis.backaction is not None:
+            final_note += f"Backaction {kpis.backaction:.2f}. "
+
+        base.append(
+            WorkflowStep(
+                id="commit",
+                label="Commit",
+                description=(
+                    final_note.strip()
+                    or "Results recorded; waiting for downstream consumers."
+                ),
+                percent_complete=100,
+                dwell_ms=700,
+            )
+        )
+
+        return base
+
     def run_experiment(self, req: RunExperimentRequest, session_id: str) -> RunExperimentResponse:
         """Run a high-level SynQc experiment according to the request."""
         effective_shot_budget, warn_for_target = self._apply_shot_guardrails(req, session_id)
@@ -135,6 +219,7 @@ class SynQcEngine:
             created_at=end,
             notes=req.notes,
             control_profile=active_controls,
+            workflow_trace=self._build_workflow_trace(req, kpis, active_controls),
         )
         self._store.add(run)
         return run

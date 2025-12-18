@@ -72,6 +72,7 @@ def test_run_experiment_returns_control_profile_on_response():
     assert result.control_profile is not None
     assert result.control_profile.drive_bias == 1.05
     assert result.kpis.shot_budget > 0
+    assert result.workflow_trace, "Workflow trace should be included for UI orchestration"
 
     # The persisted summary should include the control profile for auditability.
     summaries = store.list_recent(limit=1)
