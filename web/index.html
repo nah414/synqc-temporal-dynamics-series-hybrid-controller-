@@ -1023,28 +1023,34 @@
 </style>
 </head>
 <body>
-    <div class="app">
-      <div class="particle-layer spectralized" id="particleLayer"></div>
-      <div class="mobius-layer" aria-hidden="true">
-        <div class="mobius-wrap">
-          <picture class="mobius-picture">
-            <img
-              class="mobius-image"
-              id="mobiusImage"
-              alt="SynQc temporal dynamics ribbon"
-              loading="lazy"
-              decoding="async"
-              fetchpriority="low"
-            />
-          </picture>
-        </div>
+  <div class="app">
+    <div class="particle-layer spectralized" id="particleLayer"></div>
+    <div class="mobius-layer" aria-hidden="true">
+      <div class="mobius-wrap">
+        <picture class="mobius-picture">
+          <img
+            class="mobius-image"
+            id="mobiusImage"
+            alt="SynQc temporal dynamics ribbon"
+            loading="lazy"
+            decoding="async"
+            fetchpriority="low"
+          />
+        </picture>
       </div>
+    </div>
 
     <script>
-      if (window.MOBIUS_IMAGE_DATA) {
+      (async () => {
         const mobiusImg = document.getElementById('mobiusImage');
-        if (mobiusImg) mobiusImg.src = window.MOBIUS_IMAGE_DATA;
-      }
+        if (!mobiusImg || typeof resolveMobiusImageDataUrl !== 'function') return;
+        try {
+          const src = await resolveMobiusImageDataUrl();
+          if (src) mobiusImg.src = src;
+        } catch (err) {
+          console.warn('Mobius image decode failed', err);
+        }
+      })();
     </script>
 
     <header>
