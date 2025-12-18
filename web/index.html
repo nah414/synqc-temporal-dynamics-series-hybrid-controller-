@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <title>SynQc TDS — Temporal Dynamics Console v0.4</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="assets/mobius-image.js"></script>
   <style>
     :root {
       --bg-main: #030308;
@@ -18,12 +19,7 @@
       --kpi-warn: #ffb94d;
       --kpi-bad: #ff4d6a;
       --spectral-shift: 0deg;
-      --mobius-glass: rgba(132, 196, 255, 0.26);
-      --mobius-highlight: rgba(210, 242, 255, 0.72);
-      --mobius-shadow: rgba(24, 34, 78, 0.62);
-      --tracer-duration: 14s;
-      --mobius-trajectory: path("M 360 170 C 560 20 720 310 360 370 C 0 310 160 20 360 170 Z");
-      --mobius-tilt: rotateX(54deg) rotateY(-4deg) rotateZ(14deg);
+      --hero-visual-max-width: 1200px;
     }
     * { box-sizing: border-box; }
     body {
@@ -55,156 +51,39 @@
       justify-content: center;
       pointer-events: none;
       z-index: 0;
-      opacity: 0.92;
+      opacity: 0.96;
       mix-blend-mode: screen;
-      perspective: 1600px;
     }
     .mobius-wrap{
-      position: relative;
-      width: 760px;
-      height: 460px;
-      transform-style: preserve-3d;
-      filter:
-        drop-shadow(0 0 36px rgba(140, 210, 255, 0.26))
-        drop-shadow(0 0 84px rgba(80, 140, 255, 0.22))
-        drop-shadow(0 0 120px rgba(30, 60, 120, 0.32));
+      width: min(96vw, var(--hero-visual-max-width));
+      max-width: var(--hero-visual-max-width);
+      aspect-ratio: 16 / 7.5;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
-    .mobius-band{
-      position: absolute;
-      inset: 0;
-      border-radius: 0;
-      background: url('assets/mobius-glass.svg') center / contain no-repeat;
-      transform-style: preserve-3d;
-      transform: var(--mobius-tilt);
-      box-shadow:
-        inset 0 0 26px rgba(255, 255, 255, 0.18),
-        inset 0 24px 48px rgba(26, 52, 120, 0.52),
-        inset 0 -26px 48px rgba(6, 10, 26, 0.65);
-      mix-blend-mode: screen;
-      opacity: 0.98;
-      overflow: hidden;
+    .mobius-picture{
+      width: 100%;
+      height: 100%;
+      display: block;
     }
-    .mobius-band::before,
-    .mobius-band::after{
-      content: "";
-      position: absolute;
-      inset: 0;
-      border-radius: 0;
-      pointer-events: none;
-    }
-    .mobius-band::before{
-      background:
-        conic-gradient(from 10deg, rgba(255,255,255,0.18), rgba(255,255,255,0.4), rgba(255,255,255,0.12), rgba(255,255,255,0.42), rgba(255,255,255,0.1)),
-        radial-gradient(circle at 36% 36%, rgba(210, 242, 255, 0.65), transparent 45%),
-        radial-gradient(circle at 74% 62%, rgba(132, 206, 255, 0.5), transparent 48%);
-      mix-blend-mode: screen;
-      filter: blur(0.7px) saturate(1.2);
-      opacity: 0.9;
-    }
-    .mobius-band::after{
-      background:
-        radial-gradient(circle at 40% 46%, rgba(255, 255, 255, 0.45), transparent 36%),
-        radial-gradient(circle at 62% 58%, rgba(255, 255, 255, 0.24), transparent 38%),
-        conic-gradient(from 28deg, rgba(255,255,255,0.24), rgba(255,255,255,0.12), rgba(255,255,255,0.3), rgba(255,255,255,0.08));
-      mix-blend-mode: screen;
-      filter: blur(1.2px) saturate(1.1);
-      opacity: 0.82;
-    }
-    .mobius-path{
-      position: absolute;
-      inset: -20px;
-      border-radius: 50%;
-      background:
-        radial-gradient(ellipse at 50% 44%, rgba(140, 210, 255, 0.24), rgba(140, 210, 255, 0)),
-        conic-gradient(from 60deg, rgba(160, 220, 255, 0.32), rgba(90, 160, 255, 0.08), rgba(210, 250, 255, 0.34), rgba(90, 160, 255, 0.06));
-      filter: blur(22px);
-      opacity: 0.7;
-      transform: var(--mobius-tilt);
-      mix-blend-mode: screen;
-    }
-    .mobius-trace{
-      position: absolute;
-      inset: 4px;
-      border-radius: 50%;
-      background:
-        radial-gradient(ellipse at 52% 48%, rgba(190, 238, 255, 0.35), rgba(170, 230, 255, 0)),
-        radial-gradient(circle at 48% 70%, rgba(90, 160, 255, 0.3), rgba(80, 140, 255, 0));
-      opacity: 0.86;
-      box-shadow: inset 0 0 26px rgba(160, 220, 255, 0.28);
-      transform: var(--mobius-tilt);
-    }
-    .mobius-trail{
-      position: absolute;
-      inset: 0;
-      border-radius: 50%;
-      background:
-        conic-gradient(from 60deg, rgba(140, 210, 255, 0.18), rgba(60, 120, 255, 0.0), rgba(180, 236, 255, 0.3), rgba(60, 120, 255, 0));
-      filter: blur(24px);
-      opacity: 0.82;
-      mix-blend-mode: screen;
-      mask-image: radial-gradient(circle at center, rgba(255,255,255,0.95), rgba(255,255,255,0));
-      transform: var(--mobius-tilt);
-    }
-    .mobius-particle, .mobius-tail{
-      position: absolute;
-      width: 12px;
-      height: 12px;
-      border-radius: 999px;
-      background:
-        radial-gradient(circle at 30% 30%, #ffecec, rgba(255,255,255,0)),
-        radial-gradient(circle at 70% 70%, rgba(255,68,68,0.96), rgba(255,68,68,0));
-      box-shadow:
-        0 0 18px rgba(255,68,68,0.96),
-        0 0 48px rgba(255,68,68,0.68),
-        0 0 90px rgba(255,68,68,0.35);
-      offset-path: var(--mobius-trajectory);
-      offset-rotate: auto 80deg;
-      animation: mobiusOrbit 12.6s linear infinite;
-      mix-blend-mode: screen;
-      transform: translate(-50%, -50%) var(--mobius-tilt);
-    }
-    .mobius-tail{
-      width: 42px;
-      height: 10px;
-      border-radius: 999px;
-      background: linear-gradient(90deg, rgba(255,48,48,0.08) 0%, rgba(255,48,48,0.7) 60%, rgba(255,210,210,0.96) 100%);
-      filter: blur(3px);
-      opacity: 0.92;
-      animation-duration: var(--tracer-duration, 18s);
-      animation-delay: -3s;
-      box-shadow:
-        0 0 20px rgba(255,68,68,0.7),
-        0 0 44px rgba(255,68,68,0.38),
-        0 0 70px rgba(255,68,68,0.22);
-    }
-    .mobius-tail.tail-2{
-      width: 52px;
-      height: 13px;
-      filter: blur(7px);
-      opacity: 0.58;
-      animation-duration: calc(var(--tracer-duration, 18s) * 1.1);
-      animation-delay: -6s;
-    }
-    .mobius-tail.tail-strong{
-      width: 60px;
-      height: 16px;
-      filter: blur(5px);
-      opacity: 0.95;
-      background: linear-gradient(90deg, rgba(255,88,88,0.08), rgba(255,48,48,0.78), rgba(255,230,230,0.98));
-      animation-duration: calc(var(--tracer-duration, 18s) * 0.88);
-      animation-delay: -1.6s;
-      box-shadow:
-        0 0 26px rgba(255,68,68,0.78),
-        0 0 50px rgba(255,68,68,0.42),
-        0 0 90px rgba(255,68,68,0.2);
+    .mobius-image{
+      width: 100%;
+      height: 100%;
+      display: block;
+      object-fit: contain;
     }
     .spectralized {
       filter: hue-rotate(var(--spectral-shift, 0deg)) saturate(1.06);
       transition: filter 0.35s ease;
     }
-    @keyframes mobiusOrbit{
-      from { offset-distance: 0%; }
-      to   { offset-distance: 100%; }
+    .mobius-layer::before{
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: radial-gradient(circle at 50% 60%, rgba(3,4,12,0.45), transparent 65%);
+      mix-blend-mode: screen;
     }
     .particle {
       position: absolute;
@@ -230,6 +109,17 @@
       50% { transform: translate3d(40px, -60px, 0) scale(1.15); }
       80% { opacity: 0.4; }
       100%{ transform: translate3d(-20px,-120px,0) scale(0.9); opacity: 0; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .particle-layer { display: none; }
+      .mobius-layer {
+        opacity: 0.4;
+        mix-blend-mode: normal;
+        filter: saturate(0.78) brightness(0.95);
+        background: radial-gradient(circle at 50% 60%, rgba(8,10,24,0.4), rgba(0,0,0,0.8));
+      }
+      .mobius-layer::before { display: none; }
+      .mobius-wrap { max-width: 960px; }
     }
     header {
       position: sticky;
@@ -1133,20 +1023,29 @@
 </style>
 </head>
 <body>
-  <div class="app">
-    <div class="particle-layer spectralized" id="particleLayer"></div>
-    <div class="mobius-layer spectralized" aria-hidden="true">
-      <div class="mobius-wrap">
-        <div class="mobius-band"></div>
-        <div class="mobius-path"></div>
-        <div class="mobius-trace"></div>
-        <div class="mobius-trail"></div>
-        <div class="mobius-tail"></div>
-        <div class="mobius-tail tail-2"></div>
-        <div class="mobius-tail tail-strong"></div>
-        <div class="mobius-particle"></div>
+    <div class="app">
+      <div class="particle-layer spectralized" id="particleLayer"></div>
+      <div class="mobius-layer" aria-hidden="true">
+        <div class="mobius-wrap">
+          <picture class="mobius-picture">
+            <img
+              class="mobius-image"
+              id="mobiusImage"
+              alt="SynQc temporal dynamics ribbon"
+              loading="lazy"
+              decoding="async"
+              fetchpriority="low"
+            />
+          </picture>
+        </div>
       </div>
-    </div>
+
+    <script>
+      if (window.MOBIUS_IMAGE_DATA) {
+        const mobiusImg = document.getElementById('mobiusImage');
+        if (mobiusImg) mobiusImg.src = window.MOBIUS_IMAGE_DATA;
+      }
+    </script>
 
     <header>
       <div class="brand">

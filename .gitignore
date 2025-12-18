@@ -21,6 +21,9 @@ Thumbs.db
 .vscode/
 .idea/
 
+# Archives
+*.zip
+
 # Logs / local data
 *.log
 synqc_experiments.json
