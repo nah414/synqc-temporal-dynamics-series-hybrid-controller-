@@ -142,6 +142,30 @@
       grid-template-areas: "agent scene history" "agent scene history";
       gap: 1rem;
     }
+    .run-alert {
+      margin-top: 8px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: rgba(255, 77, 106, 0.12);
+      border: 1px solid rgba(255, 77, 106, 0.25);
+      color: #ffd1d9;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+    }
+    .run-alert .icon {
+      display: inline-flex;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 77, 106, 0.22);
+      color: #ff8aa1;
+      font-weight: 700;
+      font-size: 12px;
+    }
     @media (max-width: 1100px) {
       .console-grid {
         grid-template-columns: minmax(260px, 320px) minmax(0, 1.6fr);
@@ -755,11 +779,15 @@
   </div>
 </div>
 
-<div class="field-row">
-  <div class="field-label">Actions</div>
-  <button class="primary-btn" id="runPresetBtn" type="button">Run preset</button>
-  <div class="panel-sub" id="runStatus" aria-live="polite">Backend: not connected yet.</div>
-              <div class="panel-credit">Developed by eVision Enterprises</div>
+  <div class="field-row">
+    <div class="field-label">Actions</div>
+    <button class="primary-btn" id="runPresetBtn" type="button">Run preset</button>
+    <div class="panel-sub" id="runStatus" aria-live="polite">Backend: not connected yet.</div>
+    <div class="run-alert" id="runAlert" role="alert" style="display:none;">
+      <span class="icon" aria-hidden="true">!</span>
+      <span class="alert-text"></span>
+    </div>
+    <div class="panel-credit">Developed by eVision Enterprises</div>
 </div>
 </div>
         </div>
@@ -878,6 +906,7 @@
                 <th>Hardware</th>
                 <th>Fidelity</th>
                 <th>Latency</th>
+                <th>Error code</th>
                 <th>Status</th>
               </tr>
             </thead>
@@ -888,6 +917,7 @@
                 <td>Sim local</td>
                 <td>0.973</td>
                 <td>17.9 µs</td>
+                <td>—</td>
                 <td><span class="status-pill status-ok">OK</span></td>
               </tr>
               <tr>
@@ -896,6 +926,7 @@
                 <td>Sim local</td>
                 <td>–</td>
                 <td>15.1 µs</td>
+                <td>—</td>
                 <td><span class="status-pill status-ok">OK</span></td>
               </tr>
               <tr>
@@ -904,6 +935,7 @@
                 <td>Sim vs IBM Quantum</td>
                 <td>0.962 / 0.948</td>
                 <td>18.4 / 26.7 µs</td>
+                <td>—</td>
                 <td><span class="status-pill status-warn">Δ drift</span></td>
               </tr>
             </tbody>
@@ -947,13 +979,14 @@
                     <th>Hardware</th>
                     <th>Fidelity</th>
                     <th>Latency</th>
+                    <th>Error code</th>
                     <th>Status</th>
                   </tr>
                 </thead>
-                <tbody id="experimentsBody">
-                  <tr><td colspan="7" class="hint">No data loaded yet. Start the backend and click Reload.</td></tr>
-                </tbody>
-              </table>
+            <tbody id="experimentsBody">
+              <tr><td colspan="8" class="hint">No data loaded yet. Start the backend and click Reload.</td></tr>
+            </tbody>
+          </table>
             </div>
 
             <div class="history-footer-note" id="experimentsFooterNote">
@@ -1154,6 +1187,8 @@
     const notesInput = document.getElementById('notesInput');
     const runPresetBtn = document.getElementById('runPresetBtn');
     const runStatus = document.getElementById('runStatus');
+    const runAlert = document.getElementById('runAlert');
+    const runAlertText = runAlert?.querySelector('.alert-text');
 
     // Console history
     const historyBody = document.getElementById('historyBody');
@@ -1198,6 +1233,15 @@
     }
 
     const API_BASE = defaultApiBase();
+    const API_KEY = (() => {
+      const params = new URLSearchParams(window.location.search);
+      const fromParam = params.get('api_key') || params.get('key');
+      if (fromParam) {
+        try { localStorage.setItem('synqc_api_key', fromParam); } catch (_) { /* ignore */ }
+        return fromParam;
+      }
+      try { return localStorage.getItem('synqc_api_key'); } catch (_) { return null; }
+    })();
 
     let MAX_SHOTS_PER_EXPERIMENT = 200000;
     let DEFAULT_SHOT_BUDGET = 2048;
@@ -1211,10 +1255,24 @@
 
     function setRunStatus(text) {
       runStatus.textContent = text;
+      if (runAlert) {
+        runAlert.style.display = 'none';
+        if (runAlertText) runAlertText.textContent = '';
+      }
+    }
+
+    function showRunAlert(message) {
+      if (!message) return;
+      if (!runAlert) return;
+      if (runAlertText) runAlertText.textContent = message;
+      runAlert.style.display = 'flex';
     }
 
     async function apiGet(path) {
-      const res = await fetch(API_BASE + path, { method: 'GET' });
+      const res = await fetch(API_BASE + path, {
+        method: 'GET',
+        headers: API_KEY ? { 'X-Api-Key': API_KEY } : {},
+      });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return await res.json();
     }
@@ -1222,16 +1280,23 @@
     async function apiPost(path, payload) {
       const res = await fetch(API_BASE + path, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: Object.assign(
+          { 'Content-Type': 'application/json' },
+          API_KEY ? { 'X-Api-Key': API_KEY } : {}
+        ),
         body: JSON.stringify(payload),
       });
       if (!res.ok) {
         let detail = '';
+        let error_detail = null;
         try {
           const data = await res.json();
-          detail = data?.detail ? ` — ${data.detail}` : '';
+          error_detail = data?.detail;
+          detail = data?.detail?.message || data?.detail || '';
         } catch (_) { /* ignore */ }
-        throw new Error(`HTTP ${res.status}${detail}`);
+        const err = new Error(`HTTP ${res.status}${detail ? ` — ${detail}` : ''}`);
+        err.response = { error_detail }; // lightweight attachment for UI alerts
+        throw err;
       }
       return await res.json();
     }
@@ -1538,6 +1603,10 @@
       const tdLat = document.createElement('td');
       tdLat.textContent = (run.kpis?.latency_us == null) ? '–' : `${Number(run.kpis.latency_us).toFixed(1)} µs`;
 
+      const tdErr = document.createElement('td');
+      tdErr.textContent = run?.error_detail?.code || '—';
+      if (run?.error_detail?.code) tdErr.title = run.error_detail.code;
+
       const tdStatus = document.createElement('td');
       const pill = document.createElement('span');
       pill.className = `status-pill ${statusClass(run.kpis?.status)}`;
@@ -1550,6 +1619,7 @@
       tr.appendChild(tdHw);
       tr.appendChild(tdFid);
       tr.appendChild(tdLat);
+      tr.appendChild(tdErr);
       tr.appendChild(tdStatus);
 
       tr.addEventListener('click', () => openDetails(run.id));
@@ -1644,7 +1714,7 @@
           if (recentRunsCache.length === 0) {
             const tr = document.createElement('tr');
             const td = document.createElement('td');
-            td.colSpan = 6;
+            td.colSpan = 7;
             td.textContent = 'No runs yet.';
             td.className = 'hint';
             tr.appendChild(td);
@@ -1668,7 +1738,7 @@
       if (!recentRunsCache || recentRunsCache.length === 0) {
         const tr = document.createElement('tr');
         const td = document.createElement('td');
-        td.colSpan = 7;
+        td.colSpan = 8;
         td.textContent = 'No runs loaded.';
         td.className = 'hint';
         tr.appendChild(td);
@@ -1768,6 +1838,35 @@
         setRunStatus(`Run complete · id=${run.id}`);
       } catch (err) {
         setRunStatus(`Run failed: ${err.message}`);
+        if (err?.response?.error_detail?.message) {
+          showRunAlert(err.response.error_detail.message);
+        }
+      } finally {
+        runPresetBtn.disabled = false;
+      }
+    }
+
+    // Wrap fetch errors to surface server-provided error_detail when available
+    async function apiPost(path, payload) {
+      const res = await fetch(API_BASE + path, {
+        method: 'POST',
+        headers: Object.assign(
+          { 'Content-Type': 'application/json' },
+          API_KEY ? { 'X-Api-Key': API_KEY } : {}
+        ),
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        let detail = '';
+        let error_detail = null;
+        try {
+          const data = await res.json();
+          error_detail = data?.detail;
+          detail = data?.detail?.message || data?.detail || '';
+        } catch (_) { /* ignore */ }
+        const err = new Error(`HTTP ${res.status}${detail ? ` — ${detail}` : ''}`);
+        err.response = { error_detail }; // lightweight attachment for UI alerts
+        throw err;
       } finally {
         runPresetBtn.disabled = false;
       }
@@ -1798,8 +1897,15 @@
 
         detailsHeader.textContent = `id=${run.id} · preset=${run.preset} · hardware=${hardwareNameForId(run.hardware_target)}`;
         detailsInterpretation.textContent = deriveInterpretationFromRun(run);
-        detailsJson.textContent = JSON.stringify(run, null, 2);
+        const display = Object.assign({}, run);
+        if (run.error_detail) display.error_detail = run.error_detail;
+        detailsJson.textContent = JSON.stringify(display, null, 2);
         applyRunToKpis(run, DETAILS_KPI_IDS);
+        // Update cache entries so tables show error codes for legacy runs
+        recentRunsCache = recentRunsCache.map(r => (r.id === run.id ? run : r));
+        renderExperimentsTable();
+        applyFilterToBody(historyBody, consoleFilter);
+        applyFilterToBody(experimentsBody, experimentsFilter);
       } catch (err) {
         detailsHeader.textContent = `Could not load id=${selectedExperimentId}`;
         detailsInterpretation.textContent = `Error: ${err.message}`;
