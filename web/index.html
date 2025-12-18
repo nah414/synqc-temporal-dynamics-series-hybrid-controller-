@@ -22,6 +22,8 @@
       --mobius-highlight: rgba(180, 236, 255, 0.55);
       --mobius-shadow: rgba(35, 55, 105, 0.6);
       --tracer-duration: 18s;
+      --mobius-trajectory: path("M 360 170 C 560 20 720 310 360 370 C 0 310 160 20 360 170 Z");
+      --mobius-tilt: rotateX(56deg) rotateY(-6deg) rotateZ(18deg);
     }
     * { box-sizing: border-box; }
     body {
@@ -55,80 +57,79 @@
       z-index: 0;
       opacity: 0.92;
       mix-blend-mode: screen;
-      perspective: 1400px;
+      perspective: 1600px;
     }
     .mobius-wrap{
       position: relative;
-      width: 620px;
-      height: 380px;
+      width: 760px;
+      height: 460px;
       transform-style: preserve-3d;
       filter:
-        drop-shadow(0 0 24px rgba(120, 200, 255, 0.15))
-        drop-shadow(0 0 48px rgba(120, 200, 255, 0.12))
-        drop-shadow(0 0 68px rgba(50, 80, 140, 0.18));
+        drop-shadow(0 0 24px rgba(120, 200, 255, 0.18))
+        drop-shadow(0 0 48px rgba(120, 200, 255, 0.15))
+        drop-shadow(0 0 90px rgba(30, 60, 120, 0.28));
     }
     .mobius-band{
       position: absolute;
       inset: 0;
-      border-radius: 50%;
-      background:
-        conic-gradient(from 140deg, rgba(120, 200, 255, 0.12), rgba(120, 200, 255, 0.35), rgba(120, 200, 255, 0.14), rgba(140, 220, 255, 0.4), rgba(120, 200, 255, 0.12));
-      mask: radial-gradient(ellipse at center, transparent 35%, rgba(0,0,0,0.98) 42%, rgba(0,0,0,0.98) 74%, transparent 80%);
+      border-radius: 0;
+      background: url('assets/mobius-glass.svg') center / contain no-repeat;
       transform-style: preserve-3d;
-      transform: rotateX(64deg) rotateY(-4deg) rotateZ(24deg);
+      transform: var(--mobius-tilt);
       box-shadow:
         inset 0 0 18px rgba(255, 255, 255, 0.12),
-        inset 0 18px 32px var(--mobius-shadow),
-        inset 0 -18px 32px rgba(10, 14, 38, 0.45);
+        inset 0 18px 32px rgba(30, 44, 88, 0.5),
+        inset 0 -18px 32px rgba(10, 14, 38, 0.48);
       mix-blend-mode: screen;
-      opacity: 0.9;
+      opacity: 0.96;
     }
     .mobius-band::after{
       content: "";
       position: absolute;
       inset: 0;
-      border-radius: 50%;
+      border-radius: 0;
       background:
-        radial-gradient(circle at 32% 40%, var(--mobius-highlight), transparent 42%),
-        radial-gradient(circle at 74% 68%, rgba(122, 194, 255, 0.35), transparent 45%),
-        conic-gradient(from 20deg, rgba(255,255,255,0.08), rgba(255,255,255,0.2), rgba(255,255,255,0.04));
+        radial-gradient(circle at 30% 40%, rgba(200, 236, 255, 0.55), transparent 44%),
+        radial-gradient(circle at 74% 60%, rgba(122, 194, 255, 0.28), transparent 46%),
+        conic-gradient(from 20deg, rgba(255,255,255,0.1), rgba(255,255,255,0.24), rgba(255,255,255,0.06));
       mix-blend-mode: screen;
       filter: blur(1px) saturate(1.15);
-      opacity: 0.88;
+      opacity: 0.82;
     }
     .mobius-path{
       position: absolute;
-      inset: -14px;
+      inset: -20px;
       border-radius: 50%;
       background:
-        conic-gradient(from 60deg, rgba(110, 180, 255, 0.35), rgba(110, 180, 255, 0.08), rgba(180, 236, 255, 0.4), rgba(110, 180, 255, 0.08));
-      filter: blur(18px);
-      opacity: 0.65;
-      transform: rotateX(64deg) rotateZ(24deg);
+        radial-gradient(ellipse at 50% 46%, rgba(120, 200, 255, 0.16), rgba(120, 200, 255, 0)),
+        conic-gradient(from 60deg, rgba(110, 180, 255, 0.26), rgba(110, 180, 255, 0.08), rgba(180, 236, 255, 0.32), rgba(110, 180, 255, 0.08));
+      filter: blur(26px);
+      opacity: 0.62;
+      transform: var(--mobius-tilt);
       mix-blend-mode: screen;
     }
     .mobius-trace{
       position: absolute;
-      inset: 6px;
+      inset: 4px;
       border-radius: 50%;
       background:
-        radial-gradient(ellipse at 52% 48%, rgba(170, 230, 255, 0.3), rgba(170, 230, 255, 0)),
-        radial-gradient(circle at 38% 72%, rgba(80, 140, 255, 0.28), rgba(80, 140, 255, 0));
-      opacity: 0.78;
+        radial-gradient(ellipse at 52% 48%, rgba(170, 230, 255, 0.32), rgba(170, 230, 255, 0)),
+        radial-gradient(circle at 48% 70%, rgba(80, 140, 255, 0.26), rgba(80, 140, 255, 0));
+      opacity: 0.8;
       box-shadow: inset 0 0 22px rgba(130, 200, 255, 0.22);
-      transform: rotateX(64deg) rotateZ(24deg);
+      transform: var(--mobius-tilt);
     }
     .mobius-trail{
       position: absolute;
       inset: 0;
       border-radius: 50%;
       background:
-        conic-gradient(from 80deg, rgba(120, 200, 255, 0.2), rgba(60, 120, 255, 0.0), rgba(160, 220, 255, 0.26), rgba(60, 120, 255, 0));
-      filter: blur(26px);
-      opacity: 0.65;
+        conic-gradient(from 80deg, rgba(120, 200, 255, 0.18), rgba(60, 120, 255, 0.0), rgba(160, 220, 255, 0.24), rgba(60, 120, 255, 0));
+      filter: blur(28px);
+      opacity: 0.7;
       mix-blend-mode: screen;
-      mask-image: radial-gradient(circle at center, rgba(255,255,255,0.9), rgba(255,255,255,0));
-      transform: rotateX(64deg) rotateZ(24deg);
+      mask-image: radial-gradient(circle at center, rgba(255,255,255,0.92), rgba(255,255,255,0));
+      transform: var(--mobius-tilt);
     }
     .mobius-particle, .mobius-tail{
       position: absolute;
@@ -142,11 +143,11 @@
         0 0 16px rgba(255,120,140,0.9),
         0 0 40px rgba(255,120,140,0.55),
         0 0 74px rgba(255,120,140,0.28);
-      offset-path: path("M 210 130 C 300 30 420 230 210 260 C 0 230 120 30 210 130 Z");
-      offset-rotate: auto 90deg;
+      offset-path: var(--mobius-trajectory);
+      offset-rotate: auto 80deg;
       animation: mobiusOrbit 14s linear infinite;
       mix-blend-mode: screen;
-      transform: translate(-50%, -50%);
+      transform: translate(-50%, -50%) var(--mobius-tilt);
     }
     .mobius-tail{
       width: 42px;
