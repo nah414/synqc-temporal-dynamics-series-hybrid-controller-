@@ -176,6 +176,13 @@ class ProviderBackend(BaseBackend):
         without credentials while still exercising the full flow.
         """
 
+        if not settings.allow_provider_simulation:
+            raise RuntimeError(
+                "Provider simulation is disabled for this deployment. "
+                "To exercise provider stubs in simulation mode, set SYNQC_ALLOW_PROVIDER_SIMULATION=true "
+                "or use the local simulator backend."
+            )
+
         # Placeholder for live integration. In production deployments, swap this
         # with provider SDK dispatch and KPI extraction.
         return self._simulate(preset, shot_budget)

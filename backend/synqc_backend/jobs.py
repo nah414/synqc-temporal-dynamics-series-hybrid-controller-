@@ -2,11 +2,18 @@ from __future__ import annotations
 
 import time
 import uuid
-from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor, wait
 from threading import Lock
 from typing import Callable, Dict, Optional
 
-from .models import RunExperimentRequest
+from .engine import BudgetExceeded
+from .models import (
+    ExperimentStatus,
+    KpiBundle,
+    RunExperimentRequest,
+    RunExperimentResponse,
+)
+from .storage import ExperimentStore
 
 
 class JobStatus(str):
@@ -26,28 +33,78 @@ class JobRecord:
         self.finished_at: float | None = None
         self.result = None
         self.error: str | None = None
+        self.error_detail: dict | None = None
 
 
 class JobQueue:
     """Simple thread-pool-backed job queue for experiment execution."""
 
-    def __init__(self, worker_fn: Callable[[RunExperimentRequest, str], object], max_workers: int) -> None:
+    def __init__(
+        self,
+        worker_fn: Callable[[RunExperimentRequest, str], object],
+        max_workers: int,
+        store: ExperimentStore | None = None,
+    ) -> None:
         self._worker_fn = worker_fn
         self._executor = ThreadPoolExecutor(max_workers=max_workers)
         self._jobs: Dict[str, JobRecord] = {}
         self._futures: Dict[str, Future] = {}
         self._lock = Lock()
+        self._store = store
 
     def enqueue(self, req: RunExperimentRequest, session_id: str) -> JobRecord:
         job_id = str(uuid.uuid4())
         record = JobRecord(job_id=job_id, request=req)
         with self._lock:
             self._jobs[job_id] = record
+            self._futures.pop(job_id, None)
 
         future = self._executor.submit(self._run_job, record, session_id)
         with self._lock:
             self._futures[job_id] = future
         return record
+
+    def shutdown(self, timeout: float | None = None) -> None:
+        """Attempt a graceful shutdown so in-flight jobs can finish."""
+
+        futures: list[Future]
+        with self._lock:
+            futures = list(self._futures.values())
+
+        if timeout is None:
+            self._executor.shutdown(wait=True)
+            return
+
+        # Stop accepting new tasks, then wait up to timeout for currently tracked tasks.
+        self._executor.shutdown(wait=False)
+        wait(futures, timeout=timeout)
+
+    def _persist_failure(self, record: JobRecord) -> None:
+        if not self._store:
+            return
+        req = record.request
+        kpis = KpiBundle(
+            fidelity=None,
+            latency_us=None,
+            backaction=None,
+            shots_used=0,
+            shot_budget=req.shot_budget or 0,
+            status=ExperimentStatus.FAIL,
+        )
+        run = RunExperimentResponse(
+            id=record.id,
+            preset=req.preset,
+            hardware_target=req.hardware_target,
+            kpis=kpis,
+            created_at=record.finished_at or time.time(),
+            notes=req.notes,
+            error_detail=record.error_detail,
+        )
+        try:
+            self._store.add(run)
+        except Exception:
+            # Persistence failures should not crash the worker.
+            pass
 
     def _run_job(self, record: JobRecord, session_id: str) -> None:
         with self._lock:
@@ -57,13 +114,36 @@ class JobQueue:
             record.result = self._worker_fn(record.request, session_id)
             with self._lock:
                 record.status = JobStatus.SUCCEEDED
+        except BudgetExceeded as exc:
+            record.error = str(exc)
+            record.error_detail = {
+                "code": "session_budget_exhausted",
+                "message": str(exc),
+                "remaining": getattr(exc, "remaining", None),
+            }
+            with self._lock:
+                record.status = JobStatus.FAILED
+        except ValueError as exc:
+            record.error = str(exc)
+            record.error_detail = {
+                "code": "invalid_request",
+                "message": str(exc),
+            }
+            with self._lock:
+                record.status = JobStatus.FAILED
         except Exception as exc:  # noqa: BLE001 - we capture and expose errors
             record.error = str(exc)
+            record.error_detail = {
+                "code": "internal_error",
+                "message": str(exc),
+            }
             with self._lock:
                 record.status = JobStatus.FAILED
         finally:
             with self._lock:
                 record.finished_at = time.time()
+            if record.status == JobStatus.FAILED:
+                self._persist_failure(record)
 
     def get(self, job_id: str) -> Optional[JobRecord]:
         with self._lock:

@@ -86,6 +86,7 @@ class RunExperimentResponse(BaseModel):
     kpis: KpiBundle
     created_at: float
     notes: Optional[str] = None
+    error_detail: Optional[dict] = None
 
 
 class RunJobStatus(str, Enum):
@@ -106,6 +107,7 @@ class RunSubmissionResponse(BaseModel):
     started_at: Optional[float] = None
     finished_at: Optional[float] = None
     error: Optional[str] = None
+    error_detail: Optional[dict] = None
 
 
 class RunStatusResponse(RunSubmissionResponse):
@@ -122,6 +124,7 @@ class ExperimentSummary(BaseModel):
     hardware_target: str
     kpis: KpiBundle
     created_at: float
+    error_detail: Optional[dict] = None
 
 
 class HardwareTargetsResponse(BaseModel):
