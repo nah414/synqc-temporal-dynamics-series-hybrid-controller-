@@ -289,8 +289,11 @@
     .console-grid {
       display: grid;
       grid-template-columns: minmax(260px, 320px) minmax(0, 1.9fr) minmax(260px, 0.9fr);
-      grid-template-rows: minmax(260px, 1.4fr) minmax(220px, 1.2fr);
-      grid-template-areas: "agent scene history" "agent scene history";
+      grid-template-rows: minmax(260px, 1.3fr) minmax(200px, 1fr) minmax(200px, 0.9fr);
+      grid-template-areas:
+        "agent scene history"
+        "agent scene qubits"
+        "agent scene qubits";
       gap: 1rem;
     }
     .run-alert {
@@ -320,15 +323,19 @@
     @media (max-width: 1100px) {
       .console-grid {
         grid-template-columns: minmax(260px, 320px) minmax(0, 1.6fr);
-        grid-template-rows: auto auto auto;
-        grid-template-areas: "scene scene" "agent history" "agent history";
+        grid-template-rows: auto auto auto auto;
+        grid-template-areas:
+          "scene scene"
+          "agent history"
+          "agent qubits"
+          "agent qubits";
       }
     }
     @media (max-width: 800px) {
       .console-grid {
         grid-template-columns: minmax(0, 1fr);
-        grid-template-rows: auto auto auto;
-        grid-template-areas: "scene" "agent" "history";
+        grid-template-rows: auto auto auto auto;
+        grid-template-areas: "scene" "agent" "history" "qubits";
       }
     }
     .panel {
@@ -384,7 +391,7 @@
     .agent-input-row input {
       flex: 1; border-radius: 999px; border: 1px solid var(--border-subtle);
       background: rgba(10,13,34,0.96);
-      padding: 0.45rem 0.6rem; font-size: 0.78rem;
+      padding: 0.85rem 0.9rem; font-size: 0.86rem; min-height: 52px;
       color: var(--text-main); outline: none;
     }
     .agent-input-row input::placeholder { color: var(--text-soft); }
@@ -500,7 +507,9 @@
         radial-gradient(circle at 80% 90%, rgba(106,229,255,0.18), transparent 60%),
         #050616;
       padding: 0.7rem; position: relative; overflow: hidden;
+      display: flex; flex-direction: column; gap: 0.8rem;
     }
+    .scene-bloch-block { display: flex; flex-direction: column; gap: 0.45rem; }
     .dpd-label {
       position: absolute; top: 0.6rem; right: 0.9rem;
       font-size: 0.65rem; text-transform: uppercase;
@@ -508,6 +517,7 @@
       background: rgba(5,6,20,0.9);
       padding: 0.2rem 0.5rem; border-radius: 999px;
       border: 1px solid rgba(123,132,200,0.5);
+      z-index: 3;
     }
     .bloch-wrapper {
       display: flex; align-items: center; justify-content: center; padding-top: 0.2rem;
@@ -570,7 +580,7 @@
     .scene-notes { font-size: 0.73rem; color: var(--text-soft); opacity: 0.85; line-height: 1.4; }
 
     .neural-stack {
-      margin-top: 0.65rem;
+      margin-top: 0;
       border-radius: 14px;
       border: 1px solid var(--border-subtle);
       background: radial-gradient(circle at 18% 10%, rgba(106,229,255,0.12), transparent 45%),
@@ -578,6 +588,9 @@
         rgba(7,9,26,0.92);
       padding: 0.65rem 0.75rem;
       box-shadow: inset 0 0 18px rgba(255,255,255,0.03), 0 20px 45px rgba(0,0,0,0.55);
+      display: flex;
+      flex-direction: column;
+      flex: 1;
     }
     .neural-head {
       display: flex;
@@ -596,10 +609,17 @@
       color: var(--accent);
       font-weight: 700;
     }
+    @media (max-width: 600px) {
+      .neural-head { gap: 0.3rem; }
+      .neural-title { letter-spacing: 0.01em; }
+    }
+    @media (max-width: 520px) {
+      .neural-progress { font-size: 0.76rem; }
+    }
     .neural-web {
       position: relative;
       margin-top: 0.55rem;
-      height: 230px;
+      min-height: clamp(180px, 28vw, 260px);
       border-radius: 14px;
       background:
         linear-gradient(120deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.02) 36%, rgba(255,255,255,0.04) 72%, rgba(255,255,255,0.02) 100%),
@@ -612,6 +632,7 @@
       transform-style: preserve-3d;
       transform: rotateX(18deg) rotateY(-16deg);
       box-shadow: inset 0 0 32px rgba(255,255,255,0.02), 0 14px 36px rgba(0,0,0,0.55);
+      flex: 1;
     }
     .neural-web::after {
       content: "";
@@ -677,14 +698,15 @@
       box-shadow: 0 0 14px rgba(255,221,110,0.85);
     }
     .neural-context {
-      margin-top: 0.55rem;
+      margin-top: 0.75rem;
       border-radius: 12px;
-      padding: 0.55rem 0.65rem;
+      padding: 0.8rem 0.85rem;
       background: rgba(5,6,20,0.9);
       border: 1px solid rgba(255,255,255,0.08);
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       gap: 0.45rem;
+      min-height: 110px;
     }
     .context-chip {
       padding: 0.14rem 0.5rem;
@@ -696,9 +718,15 @@
       font-weight: 700;
     }
     .context-body {
-      font-size: 0.82rem;
+      font-size: 0.88rem;
       color: var(--text-main);
       line-height: 1.35;
+      flex: 1;
+    }
+    @media (max-width: 720px) {
+      .neural-stack { padding: 0.55rem 0.6rem; gap: 0.35rem; }
+      .neural-web { min-height: clamp(150px, 36vw, 220px); }
+      .neural-context { padding: 0.65rem 0.7rem; }
     }
     .panel-history { grid-area: history; display: flex; flex-direction: column; gap: 0.6rem; }
     .history-filters {
@@ -734,6 +762,67 @@
     .status-fail { background: rgba(255,77,106,0.18); color: var(--kpi-bad); }
     .history-footer-note {
       margin-top: 0.25rem; font-size: 0.7rem; color: var(--text-soft); opacity: 0.9;
+    }
+    .panel-qubits { grid-area: qubits; display: flex; flex-direction: column; gap: 0.55rem; }
+    .qubit-headline {
+      display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap;
+    }
+    .qubit-count { font-size: 1.05rem; font-weight: 700; color: var(--accent); }
+    .qubit-session { font-size: 0.8rem; color: var(--text-soft); }
+    .qubit-lattice {
+      position: relative;
+      min-height: 210px;
+      border-radius: 14px;
+      border: 1px solid var(--border-subtle);
+      background: radial-gradient(circle at 30% 20%, rgba(106,229,255,0.12), transparent 50%), rgba(6,8,25,0.92);
+      overflow: hidden;
+    }
+    .qubit-lattice::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at 70% 80%, rgba(255,221,110,0.12), transparent 45%);
+      pointer-events: none;
+    }
+    .qubit-node {
+      position: absolute;
+      width: 28px; height: 32px;
+      clip-path: polygon(25% 5%, 75% 5%, 100% 50%, 75% 95%, 25% 95%, 0% 50%);
+      background: linear-gradient(140deg, rgba(106,229,255,0.82), rgba(255,221,110,0.8));
+      box-shadow:
+        0 0 10px rgba(106,229,255,0.7),
+        0 0 28px rgba(106,229,255,0.3);
+      opacity: 0.9;
+      transform: translate(-50%, -50%) scale(0.94);
+      animation: qubitPulse 2.8s ease-in-out infinite;
+    }
+    .qubit-node.demo {
+      background: linear-gradient(140deg, rgba(106,229,255,0.55), rgba(255,221,110,0.6));
+      box-shadow:
+        0 0 6px rgba(106,229,255,0.55),
+        0 0 18px rgba(106,229,255,0.25);
+    }
+    .qubit-node.pulse {
+      animation-duration: 1.6s;
+      box-shadow:
+        0 0 14px rgba(255,221,110,0.85),
+        0 0 34px rgba(106,229,255,0.5);
+    }
+    .qubit-node.glow {
+      filter: drop-shadow(0 0 12px rgba(106,229,255,0.45));
+    }
+    @keyframes qubitPulse {
+      0%, 100% { transform: translate(-50%, -50%) scale(0.92); opacity: 0.82; }
+      50% { transform: translate(-50%, -50%) scale(1.06); opacity: 1; }
+    }
+    .qubit-footnote {
+      font-size: 0.75rem;
+      color: var(--text-soft);
+      border-radius: 12px;
+      border: 1px solid var(--border-subtle);
+      background: rgba(5,7,20,0.85);
+      padding: 0.55rem 0.6rem;
+      line-height: 1.35;
     }
     footer {
       position: relative; z-index: 1;
@@ -1074,8 +1163,8 @@
         <div class="agent-body">
           <div class="agent-chat-log" id="agentChatLog">
             <div class="msg msg-agent">
-              <strong>SynQc Guide:</strong> Welcome. Tell me what you want to learn or test —
-              examples: “Run a coherence health check”, “Measure latency”, “Compare this backend
+              <strong>SynQc Guide:</strong> Welcome. Tell me what you want to learn or test.
+              Examples: “Run a coherence health check”, “Measure latency”, “Compare this backend
               to the simulator”, or “Walk me through a full SynQc DPD example.”
             </div>
           </div>
@@ -1179,24 +1268,31 @@
         <div class="scene-main">
           <div class="scene-visual spectralized">
             <div class="dpd-label">Drive · Probe · Drive</div>
-            <div class="bloch-wrapper">
-              <div class="bloch-sphere spectralized" aria-label="Bloch sphere state visualization">
-                <div class="bloch-atmosphere" id="blochAtmosphere" aria-hidden="true"></div>
-                <div class="bloch-noise" id="blochNoise" aria-hidden="true"></div>
-                <div class="bloch-ring ring-a" id="blochRingA" aria-hidden="true"></div>
-                <div class="bloch-ring ring-b" id="blochRingB" aria-hidden="true"></div>
-                <div class="bloch-ring ring-c" id="blochRingC" aria-hidden="true"></div>
+            <div class="scene-bloch-block">
+              <div class="bloch-wrapper">
+                <div class="bloch-sphere spectralized" aria-label="Bloch sphere state visualization">
+                  <div class="bloch-atmosphere" id="blochAtmosphere" aria-hidden="true"></div>
+                  <div class="bloch-noise" id="blochNoise" aria-hidden="true"></div>
+                  <div class="bloch-ring ring-a" id="blochRingA" aria-hidden="true"></div>
+                  <div class="bloch-ring ring-b" id="blochRingB" aria-hidden="true"></div>
+                  <div class="bloch-ring ring-c" id="blochRingC" aria-hidden="true"></div>
 
-                <svg class="bloch-trace" id="blochTrace" viewBox="0 0 100 100" aria-hidden="true">
-                  <path class="trace-path" d="M10 50 C 25 15, 75 15, 90 50 C 75 85, 25 85, 10 50 Z"></path>
-                  <path class="trace-path trace-path2" d="M20 50 C 32 28, 68 28, 80 50 C 68 72, 32 72, 20 50 Z"></path>
-                </svg>
+                  <svg class="bloch-trace" id="blochTrace" viewBox="0 0 100 100" aria-hidden="true">
+                    <path class="trace-path" d="M10 50 C 25 15, 75 15, 90 50 C 75 85, 25 85, 10 50 Z"></path>
+                    <path class="trace-path trace-path2" d="M20 50 C 32 28, 68 28, 80 50 C 68 72, 32 72, 20 50 Z"></path>
+                  </svg>
 
-                <div class="bloch-equator"></div>
-                <div class="bloch-meridian"></div>
-                <div class="bloch-axis-z"></div>
-                <div class="bloch-state" id="blochState"></div>
-                <div class="bloch-orbit-dot" id="blochOrbitDot" aria-hidden="true"></div>
+                  <div class="bloch-equator"></div>
+                  <div class="bloch-meridian"></div>
+                  <div class="bloch-axis-z"></div>
+                  <div class="bloch-state" id="blochState"></div>
+                  <div class="bloch-orbit-dot" id="blochOrbitDot" aria-hidden="true"></div>
+                </div>
+              </div>
+              <div class="scene-notes">
+                This visualization represents the effective state of a single qubit under a SynQc
+                Drive–Probe–Drive (DPD) protocol. The moving point suggests how your combined drive,
+                probe, and feedback operations move the state on (and off) the Bloch sphere in time.
               </div>
             </div>
 
@@ -1213,11 +1309,6 @@
                 <div class="context-chip">Live context</div>
                 <div class="context-body" id="workflowContext">Waiting for the next SynQc run…</div>
               </div>
-            </div>
-            <div class="scene-notes">
-              This visualization represents the effective state of a single qubit under a SynQc
-              Drive–Probe–Drive (DPD) protocol. The moving point suggests how your combined drive,
-              probe, and feedback operations move the state on (and off) the Bloch sphere in time.
             </div>
           </div>
           <div class="scene-timeline spectralized">
@@ -1316,6 +1407,20 @@
           In a live deployment, each row links to full analysis, raw pulse/circuit definitions,
           and provider logs. This HTML file is a UI shell; the SynQc backend is responsible for
           running real experiments and storing data.
+        </div>
+      </section>
+      <section class="panel panel-qubits spectralized">
+        <div class="panel-header qubit-headline">
+          <div>
+            <div class="panel-title">Qubit entanglement footprint</div>
+            <div class="panel-sub">Hexagonal lattice preview for live runs</div>
+          </div>
+          <div class="qubit-session" id="qubitSessionTotal">Session total: —</div>
+        </div>
+        <div class="qubit-count" id="qubitCountDisplay">Demo: 1–25 qubits</div>
+        <div class="qubit-lattice" id="qubitLattice" aria-label="Qubit lattice visualization"></div>
+        <div class="qubit-footnote" id="qubitNote">
+          Waiting for backend data. A looping demo shows 1–25 qubits in a SynQc-styled lattice until live runs complete.
         </div>
       </section>
       <section class="panel panel-controls">
@@ -1636,6 +1741,10 @@
     // Console history
     const historyBody = document.getElementById('historyBody');
     const historyFiltersConsole = document.getElementById('historyFiltersConsole');
+    const qubitLattice = document.getElementById('qubitLattice');
+    const qubitCountDisplay = document.getElementById('qubitCountDisplay');
+    const qubitSessionTotal = document.getElementById('qubitSessionTotal');
+    const qubitNote = document.getElementById('qubitNote');
 
     // Experiments page
     const experimentsBody = document.getElementById('experimentsBody');
@@ -1681,6 +1790,19 @@
     // --------------------------------------------
     // Backend wiring
     // --------------------------------------------
+    const SESSION_ID = (() => {
+      const key = 'synqc_session_id';
+      try {
+        const stored = localStorage.getItem(key);
+        if (stored) return stored;
+        const generated = `synqc-web-${Math.random().toString(36).slice(2, 10)}`;
+        localStorage.setItem(key, generated);
+        return generated;
+      } catch (_) {
+        return `synqc-web-${Math.random().toString(36).slice(2, 10)}`;
+      }
+    })();
+
     function defaultApiBase() {
       const params = new URLSearchParams(window.location.search);
       const override = params.get('api');
@@ -1733,6 +1855,10 @@
     let workflowTimers = [];
 
     let selectedExperimentId = null;
+    let qubitDemoInterval = null;
+    let qubitDemoCount = 1;
+    let latestQubitCount = null;
+    let sessionQubitTotal = 0;
 
     function setRunStatus(text) {
       runStatus.textContent = text;
@@ -1752,7 +1878,10 @@
     async function apiGet(path) {
       const res = await fetch(API_BASE + path, {
         method: 'GET',
-        headers: API_KEY ? { 'X-Api-Key': API_KEY } : {},
+        headers: Object.assign(
+          { 'X-Session-Id': SESSION_ID },
+          API_KEY ? { 'X-Api-Key': API_KEY } : {}
+        ),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return await res.json();
@@ -1763,6 +1892,7 @@
         method: 'POST',
         headers: Object.assign(
           { 'Content-Type': 'application/json' },
+          { 'X-Session-Id': SESSION_ID },
           API_KEY ? { 'X-Api-Key': API_KEY } : {}
         ),
         body: JSON.stringify(payload),
@@ -1990,6 +2120,127 @@
         const d = (idx === 0) ? dash : (dash * 1.2);
         p.style.animationDuration = `${d.toFixed(2)}s`;
       });
+    }
+
+    // --------------------------------------------
+    // Qubit lattice visualization
+    // --------------------------------------------
+    function generateHexCoordinates(count) {
+      if (!Number.isFinite(count) || count <= 0) return [];
+      const coords = [{ q: 0, r: 0 }];
+      if (count === 1) return coords;
+
+      const directions = [
+        { dq: 1, dr: 0 }, { dq: 1, dr: -1 }, { dq: 0, dr: -1 },
+        { dq: -1, dr: 0 }, { dq: -1, dr: 1 }, { dq: 0, dr: 1 },
+      ];
+
+      let radius = 1;
+      while (coords.length < count) {
+        let q = radius;
+        let r = 0;
+        for (let side = 0; side < 6; side += 1) {
+          const { dq, dr } = directions[side];
+          for (let step = 0; step < radius; step += 1) {
+            if (coords.length >= count) break;
+            coords.push({ q, r });
+            q += dq;
+            r += dr;
+          }
+          if (coords.length >= count) break;
+        }
+        radius += 1;
+      }
+      return coords.slice(0, count);
+    }
+
+    function axialToPixel(coord, size) {
+      const x = size * 1.5 * coord.q;
+      const y = size * Math.sqrt(3) * (coord.r + coord.q / 2);
+      return { x, y };
+    }
+
+    function renderQubitLattice(count, { demo = false, pulse = true } = {}) {
+      if (!qubitLattice) return;
+      const clampedCount = Math.max(1, Math.min(count || 1, 64));
+      const coords = generateHexCoordinates(clampedCount);
+      const size = 14;
+      const pixels = coords.map(c => axialToPixel(c, size));
+      const xs = pixels.map(p => p.x);
+      const ys = pixels.map(p => p.y);
+      const minX = Math.min(...xs);
+      const maxX = Math.max(...xs);
+      const minY = Math.min(...ys);
+      const maxY = Math.max(...ys);
+      const pad = 24;
+      const availableW = (qubitLattice.clientWidth || 360) - pad * 2;
+      const availableH = (qubitLattice.clientHeight || 220) - pad * 2;
+      const scaleX = availableW / Math.max(1, (maxX - minX));
+      const scaleY = availableH / Math.max(1, (maxY - minY));
+      const scale = Math.min(scaleX, scaleY);
+
+      qubitLattice.innerHTML = '';
+      pixels.forEach((p, idx) => {
+        const node = document.createElement('div');
+        node.className = 'qubit-node';
+        if (demo) node.classList.add('demo');
+        if (pulse && idx % 3 === 0) node.classList.add('pulse');
+        if (idx % 5 === 0) node.classList.add('glow');
+        node.style.left = `${pad + (p.x - minX) * scale}px`;
+        node.style.top = `${pad + (p.y - minY) * scale}px`;
+        node.style.animationDelay = `${(idx % 6) * 0.08}s`;
+        qubitLattice.appendChild(node);
+      });
+    }
+
+    function stopQubitDemo() {
+      if (qubitDemoInterval) clearInterval(qubitDemoInterval);
+      qubitDemoInterval = null;
+    }
+
+    function startQubitDemo() {
+      stopQubitDemo();
+      qubitDemoCount = 1;
+      renderQubitLattice(qubitDemoCount, { demo: true });
+      if (qubitCountDisplay) qubitCountDisplay.textContent = 'Demo: 1–25 qubits';
+      if (qubitNote) qubitNote.textContent = 'Looping through 1–25 qubits until a live run completes.';
+      qubitDemoInterval = setInterval(() => {
+        qubitDemoCount = (qubitDemoCount % 25) + 1;
+        renderQubitLattice(qubitDemoCount, { demo: true });
+      }, 1400);
+    }
+
+    function applyQubitPanel(qubits, sessionTotal) {
+      if (!qubitLattice) return;
+      if (Number.isFinite(sessionTotal)) {
+        sessionQubitTotal = sessionTotal;
+        if (qubitSessionTotal) qubitSessionTotal.textContent = `Session total: ${sessionTotal.toLocaleString()} qubits`;
+      }
+      if (Number.isFinite(qubits) && qubits > 0) {
+        latestQubitCount = qubits;
+        stopQubitDemo();
+        renderQubitLattice(qubits, { pulse: true });
+        if (qubitCountDisplay) {
+          qubitCountDisplay.textContent = `Live entanglement footprint: ${qubits.toLocaleString()} qubit${qubits === 1 ? '' : 's'}`;
+        }
+        if (qubitNote) {
+          qubitNote.textContent = 'Counts update after each run once entanglement is detected. Session totals reflect your end-of-session footprint.';
+        }
+      } else if (!qubitDemoInterval) {
+        startQubitDemo();
+      }
+    }
+
+    async function refreshQubitPanel() {
+      try {
+        const data = await apiGet('/telemetry/qubits');
+        applyQubitPanel(
+          Number.isFinite(Number(data.last_run_qubits)) ? Number(data.last_run_qubits) : null,
+          Number.isFinite(Number(data.session_total_qubits)) ? Number(data.session_total_qubits) : sessionQubitTotal
+        );
+      } catch (_) {
+        if (!qubitDemoInterval) startQubitDemo();
+      }
     }
 
     // --------------------------------------------
@@ -2470,11 +2721,15 @@
           if (!lastRun && recentRunsCache.length) {
             primeWorkflowFromRun(recentRunsCache[0]);
           }
+          if (recentRunsCache.length) {
+            applyQubitPanel(recentRunsCache[0].qubits_used, sessionQubitTotal);
+          }
         } catch (_) { /* ignore */ }
 
       } catch (err) {
         setRunStatus(`Backend: not reachable (${API_BASE}). Start it and refresh.`);
       }
+      await refreshQubitPanel();
     }
 
     function renderExperimentsTable() {
@@ -2578,6 +2833,7 @@
         applyRunToKpis(run, CONSOLE_KPI_IDS);
         sceneInterpretation.textContent = deriveInterpretationFromRun(run);
         primeWorkflowFromRun(run);
+        applyQubitPanel(run.qubits_used, sessionQubitTotal);
 
         // Refresh lists
         await refreshFromBackend();
@@ -2761,6 +3017,7 @@
     // Boot
     // --------------------------------------------
     primeWorkflowFromRun(lastRun);
+    startQubitDemo();
     refreshFromBackend();
     updateInterpretationText();
   </script>

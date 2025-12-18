@@ -25,7 +25,9 @@ from .models import (
     RunStatusResponse,
     RunSubmissionResponse,
     ExperimentSummary,
+    QubitTelemetry,
 )
+from .qubit_usage import SessionQubitTracker
 from .storage import ExperimentStore
 
 
@@ -36,7 +38,13 @@ budget_tracker = BudgetTracker(
     redis_url=settings.redis_url, session_ttl_seconds=settings.session_budget_ttl_seconds
 )
 control_store = ControlProfileStore(persist_path=Path("./synqc_controls.json"))
-engine = SynQcEngine(store=store, budget_tracker=budget_tracker, control_store=control_store)
+qubit_tracker = SessionQubitTracker(ttl_seconds=settings.session_budget_ttl_seconds)
+engine = SynQcEngine(
+    store=store,
+    budget_tracker=budget_tracker,
+    control_store=control_store,
+    usage_tracker=qubit_tracker,
+)
 queue = JobQueue(engine.run_experiment, max_workers=settings.worker_pool_size, store=store)
 metrics_exporter = MetricsExporter(
     budget_tracker=budget_tracker,
@@ -122,6 +130,7 @@ def health() -> dict:
         "budget_tracker": budget_tracker.health_summary(),
         "queue": queue.stats(),
         "control_profile": control_store.get(),
+        "qubit_usage": qubit_tracker.health(),
     }
 
 
@@ -273,3 +282,25 @@ def list_recent_experiments(limit: int = 50, _: None = Depends(require_api_key))
     if limit <= 0:
         raise HTTPException(status_code=400, detail="limit must be positive")
     return store.list_recent(limit=limit)
+
+
+@app.get("/telemetry/qubits", response_model=QubitTelemetry, tags=["telemetry"])
+def get_qubit_telemetry(
+    _: None = Depends(require_api_key),
+    session_id: str = Depends(get_session_id),
+) -> QubitTelemetry:
+    """Return session-scoped qubit usage for visualization."""
+
+    snapshot = qubit_tracker.snapshot(session_id)
+    # If no runs have been executed yet this session, fall back to latest stored run
+    last_run_qubits = snapshot.last_run_qubits or None
+    if last_run_qubits is None:
+        recent = store.list_recent(limit=1)
+        if recent:
+            last_run_qubits = recent[0].qubits_used
+
+    return QubitTelemetry(
+        session_total_qubits=snapshot.session_total,
+        last_run_qubits=last_run_qubits,
+        last_updated=snapshot.last_updated,
+    )

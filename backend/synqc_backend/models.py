@@ -107,6 +107,10 @@ class RunExperimentResponse(BaseModel):
     hardware_target: str
     kpis: KpiBundle
     created_at: float
+    qubits_used: int = Field(
+        default=0,
+        description="Estimated number of qubits entangled/active during the run.",
+    )
     notes: Optional[str] = None
     control_profile: Optional[ControlProfile] = None
     error_detail: Optional[dict] = None
@@ -151,6 +155,10 @@ class ExperimentSummary(BaseModel):
     hardware_target: str
     kpis: KpiBundle
     created_at: float
+    qubits_used: int = Field(
+        default=0,
+        description="Estimated number of qubits entangled/active during the run.",
+    )
     control_profile: Optional[ControlProfile] = None
     error_detail: Optional[dict] = None
 
@@ -159,3 +167,22 @@ class HardwareTargetsResponse(BaseModel):
     """List wrapper for hardware targets."""
 
     targets: List[HardwareTarget]
+
+
+class QubitTelemetry(BaseModel):
+    """Session-scoped qubit usage for UI telemetry."""
+
+    session_total_qubits: int = Field(
+        default=0,
+        description="Cumulative qubits engaged for the current session (resets after TTL).",
+    )
+    last_run_qubits: Optional[int] = Field(
+        default=None,
+        description="Most recent run's entangled qubit count, if available.",
+    )
+    last_updated: Optional[float] = Field(
+        default=None,
+        description="Timestamp of the last update for this session.",
+    )
+    demo_min_qubits: int = Field(default=1, description="Lower bound for demo loop visualization.")
+    demo_max_qubits: int = Field(default=25, description="Upper bound for demo loop visualization.")
