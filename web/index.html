@@ -17,6 +17,7 @@
       --kpi-good: #2ecc71;
       --kpi-warn: #ffb94d;
       --kpi-bad: #ff4d6a;
+      --tracer-duration: 18s;
     }
     * { box-sizing: border-box; }
     body {
@@ -48,60 +49,89 @@
       justify-content: center;
       pointer-events: none;
       z-index: 0;
-      opacity: 0.55;
+      opacity: 0.82;
       mix-blend-mode: screen;
+      filter: saturate(1.15);
     }
     .mobius-wrap{
       position: relative;
-      width: 420px;
-      height: 260px;
-      filter: drop-shadow(0 0 14px rgba(255,100,120,0.16));
+      width: 520px;
+      height: 320px;
+      filter:
+        drop-shadow(0 0 18px rgba(255,100,120,0.26))
+        drop-shadow(0 0 34px rgba(255,120,140,0.18));
     }
     .mobius-trace{
       position: absolute;
       inset: 0;
       border-radius: 50%;
-      background: radial-gradient(ellipse at center, rgba(255,120,140,0.12), rgba(255,120,140,0));
-      opacity: 0.6;
+      background:
+        radial-gradient(ellipse at center, rgba(255,120,140,0.25), rgba(255,120,140,0)),
+        radial-gradient(circle at 30% 70%, rgba(255,180,200,0.15), rgba(255,180,200,0));
+      opacity: 0.82;
+      box-shadow: inset 0 0 24px rgba(255,120,140,0.2);
     }
     .mobius-path{
       position: absolute;
       inset: 0;
-      background: conic-gradient(from 90deg, rgba(255,120,140,0.28), rgba(255,120,140,0), rgba(255,120,140,0.28), rgba(255,120,140,0));
-      filter: blur(12px);
-      opacity: 0.35;
-      transform: rotate(12deg);
+      background: conic-gradient(from 90deg, rgba(255,120,140,0.44), rgba(255,120,140,0.08), rgba(255,120,140,0.48), rgba(255,120,140,0.05));
+      filter: blur(8px);
+      opacity: 0.6;
+      transform: rotate(10deg);
+    }
+    .mobius-trail{
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      background: conic-gradient(from 45deg, rgba(255,140,160,0.24), rgba(255,90,120,0.0), rgba(255,140,160,0.34), rgba(255,90,120,0.0));
+      filter: blur(20px);
+      opacity: 0.55;
+      mix-blend-mode: screen;
+      mask-image: radial-gradient(circle at center, rgba(255,255,255,0.95), rgba(255,255,255,0));
     }
     .mobius-particle, .mobius-tail{
       position: absolute;
-      width: 9px;
-      height: 9px;
+      width: 11px;
+      height: 11px;
       border-radius: 999px;
-      background: radial-gradient(circle at 30% 30%, #fff7f9, rgba(255,255,255,0));
+      background:
+        radial-gradient(circle at 30% 30%, #fff7f9, rgba(255,255,255,0)),
+        radial-gradient(circle at 70% 70%, rgba(255,120,140,0.8), rgba(255,120,140,0));
       box-shadow:
-        0 0 12px rgba(255,120,140,0.75),
-        0 0 30px rgba(255,120,140,0.35);
+        0 0 14px rgba(255,120,140,0.9),
+        0 0 36px rgba(255,120,140,0.48),
+        0 0 60px rgba(255,120,140,0.24);
       offset-path: path("M 210 130 C 300 30 420 230 210 260 C 0 230 120 30 210 130 Z");
       offset-rotate: 0deg;
       animation: mobiusOrbit 14s linear infinite;
       mix-blend-mode: screen;
+      transform: translate(-50%, -50%);
     }
     .mobius-tail{
-      width: 12px;
-      height: 12px;
-      background: radial-gradient(circle at 30% 30%, rgba(255,180,190,0.85), rgba(255,120,140,0));
-      filter: blur(6px);
-      opacity: 0.55;
-      animation-duration: 18s;
+      width: 14px;
+      height: 14px;
+      background: radial-gradient(circle at 30% 30%, rgba(255,180,190,0.95), rgba(255,120,140,0));
+      filter: blur(5px);
+      opacity: 0.8;
+      animation-duration: var(--tracer-duration, 18s);
       animation-delay: -4s;
     }
     .mobius-tail.tail-2{
-      width: 16px;
-      height: 16px;
-      filter: blur(10px);
-      opacity: 0.35;
-      animation-duration: 22s;
-      animation-delay: -9s;
+      width: 18px;
+      height: 18px;
+      filter: blur(9px);
+      opacity: 0.48;
+      animation-duration: calc(var(--tracer-duration, 18s) * 1.25);
+      animation-delay: -8s;
+    }
+    .mobius-tail.tail-strong{
+      width: 26px;
+      height: 14px;
+      filter: blur(7px);
+      opacity: 0.9;
+      background: linear-gradient(90deg, rgba(255,180,190,0.95), rgba(255,120,140,0.1));
+      animation-duration: calc(var(--tracer-duration, 18s) * 0.85);
+      animation-delay: -2s;
     }
     @keyframes mobiusOrbit{
       from { offset-distance: 0%; }
@@ -338,6 +368,51 @@
       border-radius: 10px; border: 1px solid var(--border-subtle);
       background: #07091c; color: var(--text-main);
       padding: 0.3rem 0.45rem; font-size: 0.78rem; outline: none;
+    }
+    .control-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 0.7rem;
+      margin-top: 0.4rem;
+    }
+    .panel-controls { grid-column: 1 / -1; }
+    .control-card {
+      border-radius: 14px;
+      border: 1px solid var(--border-subtle);
+      background: rgba(7,9,26,0.96);
+      padding: 0.55rem 0.6rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+    .control-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.45rem;
+      font-size: 0.8rem;
+    }
+    .control-value { color: var(--accent); font-weight: 700; }
+    .control-slider {
+      width: 100%;
+      accent-color: #ff8297;
+    }
+    .control-toggle {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.8rem;
+    }
+    .control-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      margin-top: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .control-status {
+      font-size: 0.8rem;
+      color: var(--text-soft);
     }
     .panel-scene { grid-area: scene; display: flex; flex-direction: column; gap: 0.7rem; }
     .scene-top {
@@ -760,8 +835,10 @@
       <div class="mobius-wrap">
         <div class="mobius-path"></div>
         <div class="mobius-trace"></div>
+        <div class="mobius-trail"></div>
         <div class="mobius-tail"></div>
         <div class="mobius-tail tail-2"></div>
+        <div class="mobius-tail tail-strong"></div>
         <div class="mobius-particle"></div>
       </div>
     </div>
@@ -994,6 +1071,7 @@
                 <th>Hardware</th>
                 <th>Fidelity</th>
                 <th>Latency</th>
+                <th>Controls</th>
                 <th>Error code</th>
                 <th>Status</th>
               </tr>
@@ -1005,6 +1083,7 @@
                 <td>Sim local</td>
                 <td>0.973</td>
                 <td>17.9 µs</td>
+                <td>drive 1.00 · gain 0.35 · clamp 600 ns</td>
                 <td>—</td>
                 <td><span class="status-pill status-ok">OK</span></td>
               </tr>
@@ -1014,6 +1093,7 @@
                 <td>Sim local</td>
                 <td>–</td>
                 <td>15.1 µs</td>
+                <td>drive 1.00 · gain 0.35 · clamp 600 ns</td>
                 <td>—</td>
                 <td><span class="status-pill status-ok">OK</span></td>
               </tr>
@@ -1023,6 +1103,7 @@
                 <td>Sim vs IBM Quantum</td>
                 <td>0.962 / 0.948</td>
                 <td>18.4 / 26.7 µs</td>
+                <td>drive 1.00 · gain 0.35 · clamp 600 ns</td>
                 <td>—</td>
                 <td><span class="status-pill status-warn">Δ drift</span></td>
               </tr>
@@ -1033,6 +1114,71 @@
           In a live deployment, each row links to full analysis, raw pulse/circuit definitions,
           and provider logs. This HTML file is a UI shell; the SynQc backend is responsible for
           running real experiments and storing data.
+        </div>
+      </section>
+      <section class="panel panel-controls">
+        <div class="panel-header">
+          <div>
+            <div class="panel-title">Engineering controls</div>
+            <div class="panel-sub">Manual adjustments for drive/probe/feedback behavior</div>
+          </div>
+          <div class="panel-sub" id="controlMeta">Live profile</div>
+        </div>
+        <div class="control-grid">
+          <div class="control-card">
+            <div class="control-head">
+              <div>Drive bias</div>
+              <div class="control-value" id="driveBiasValue">1.00x</div>
+            </div>
+            <input type="range" min="0.5" max="1.5" step="0.01" value="1" id="driveBiasInput" class="control-slider" aria-label="Drive bias multiplier" />
+            <div class="panel-sub">Scales drive amplitude across the DPD bundle.</div>
+          </div>
+          <div class="control-card">
+            <div class="control-head">
+              <div>Probe window</div>
+              <div class="control-value" id="probeWindowValue">120 ns</div>
+            </div>
+            <input type="range" min="10" max="5000" step="10" value="120" id="probeWindowInput" class="control-slider" aria-label="Probe window length (ns)" />
+            <div class="panel-sub">Duration of mid-circuit measurement segment.</div>
+          </div>
+          <div class="control-card">
+            <div class="control-head">
+              <div>Feedback gain</div>
+              <div class="control-value" id="feedbackGainValue">0.35</div>
+            </div>
+            <input type="range" min="0" max="3" step="0.05" value="0.35" id="feedbackGainInput" class="control-slider" aria-label="Feedback gain" />
+            <div class="panel-sub">Applied during the final drive/feedback leg.</div>
+          </div>
+          <div class="control-card">
+            <div class="control-head">
+              <div>Safety clamp</div>
+              <div class="control-value" id="safetyClampValue">600 ns</div>
+            </div>
+            <input type="range" min="0" max="20000" step="50" value="600" id="safetyClampInput" class="control-slider" aria-label="Safety clamp duration (ns)" />
+            <div class="panel-sub">Upper bound for composite pulse trains. 0 disables the clamp.</div>
+          </div>
+          <div class="control-card">
+            <div class="control-head">
+              <div>Tracer persistence</div>
+              <div class="control-value" id="tracerPersistenceValue">420 ms</div>
+            </div>
+            <input type="range" min="50" max="5000" step="10" value="420" id="tracerPersistenceInput" class="control-slider" aria-label="Tracer persistence (ms)" />
+            <div class="panel-sub">Controls how long tails remain visible on the Mobius tracer.</div>
+          </div>
+          <div class="control-card">
+            <div class="control-head">
+              <div>Guards &amp; notes</div>
+            </div>
+            <label class="control-toggle">
+              <input type="checkbox" id="thermalGuardToggle" checked /> Thermal guard enabled
+            </label>
+            <textarea class="field-input" rows="3" id="controlNotesInput" placeholder="Operator notes for this control profile"></textarea>
+            <div class="panel-sub">Guardrails stay on for production unless explicitly disabled.</div>
+          </div>
+        </div>
+        <div class="control-actions">
+          <button class="primary-btn" type="button" id="applyControlsBtn">Apply to backend</button>
+          <div class="control-status" id="controlStatus">Awaiting backend profile…</div>
         </div>
       </section>
         </div>
@@ -1067,12 +1213,13 @@
                     <th>Hardware</th>
                     <th>Fidelity</th>
                     <th>Latency</th>
+                    <th>Controls</th>
                     <th>Error code</th>
                     <th>Status</th>
                   </tr>
                 </thead>
             <tbody id="experimentsBody">
-              <tr><td colspan="8" class="hint">No data loaded yet. Start the backend and click Reload.</td></tr>
+              <tr><td colspan="9" class="hint">No data loaded yet. Start the backend and click Reload.</td></tr>
             </tbody>
           </table>
             </div>
@@ -1145,6 +1292,7 @@
             </div>
 
             <div class="scene-notes" id="detailsInterpretation" style="margin-top:0.6rem;">Select a run to see a plain-language summary here.</div>
+            <div class="panel-sub" id="detailsControlProfile" style="margin-top:0.4rem;">Active controls: —</div>
 
             <div class="panel-sub" style="margin-top:0.7rem;">Raw record</div>
             <pre class="json-block" id="detailsJson">{}</pre>
@@ -1299,12 +1447,30 @@
     const detailsHeader = document.getElementById('detailsHeader');
     const detailsJson = document.getElementById('detailsJson');
     const detailsInterpretation = document.getElementById('detailsInterpretation');
+    const detailsControlProfile = document.getElementById('detailsControlProfile');
 
     const detailsKpiFidelity = document.getElementById('detailsKpiFidelity');
     const detailsKpiLatency = document.getElementById('detailsKpiLatency');
     const detailsKpiBackaction = document.getElementById('detailsKpiBackaction');
     const detailsKpiShots = document.getElementById('detailsKpiShots');
     const detailsKpiStatus = document.getElementById('detailsKpiStatus');
+
+    // Engineering controls
+    const driveBiasInput = document.getElementById('driveBiasInput');
+    const driveBiasValue = document.getElementById('driveBiasValue');
+    const probeWindowInput = document.getElementById('probeWindowInput');
+    const probeWindowValue = document.getElementById('probeWindowValue');
+    const feedbackGainInput = document.getElementById('feedbackGainInput');
+    const feedbackGainValue = document.getElementById('feedbackGainValue');
+    const safetyClampInput = document.getElementById('safetyClampInput');
+    const safetyClampValue = document.getElementById('safetyClampValue');
+    const tracerPersistenceInput = document.getElementById('tracerPersistenceInput');
+    const tracerPersistenceValue = document.getElementById('tracerPersistenceValue');
+    const thermalGuardToggle = document.getElementById('thermalGuardToggle');
+    const controlNotesInput = document.getElementById('controlNotesInput');
+    const applyControlsBtn = document.getElementById('applyControlsBtn');
+    const controlStatus = document.getElementById('controlStatus');
+    const controlMeta = document.getElementById('controlMeta');
 
     // --------------------------------------------
     // Backend wiring
@@ -1354,6 +1520,8 @@
     let recentRunsCache = [];
     let hardwareTargetsCache = [];
     let healthCache = null;
+
+    let controlProfileCache = null;
 
     let selectedExperimentId = null;
 
@@ -1453,6 +1621,108 @@
       return opt ? opt.textContent : id;
     }
 
+    function fmtNs(ns) {
+      return `${Number(ns || 0).toLocaleString()} ns`;
+    }
+
+    function fmtMs(ms) {
+      return `${Number(ms || 0).toLocaleString()} ms`;
+    }
+
+    function summarizeControlProfile(profile) {
+      if (!profile) return '—';
+      const drive = Number(profile.drive_bias ?? 1).toFixed(2);
+      const gain = Number(profile.feedback_gain ?? 0).toFixed(2);
+      const clamp = `${Number(profile.safety_clamp_ns ?? 0).toLocaleString()} ns`;
+      const guard = profile.thermal_guard_enabled === false ? 'guards off' : 'guards on';
+      return `drive ${drive} · gain ${gain} · clamp ${clamp} · ${guard}`;
+    }
+
+    function setTracerPersistence(ms) {
+      if (!Number.isFinite(ms)) return;
+      const clamped = Math.max(50, Math.min(ms, 5000));
+      const duration = 12 + (clamped / 5000) * 14; // 12–26s
+      document.documentElement.style.setProperty('--tracer-duration', `${duration.toFixed(1)}s`);
+      if (tracerPersistenceValue) tracerPersistenceValue.textContent = fmtMs(clamped);
+    }
+
+    function applyControlProfileToUi(profile) {
+      if (!profile) return;
+      controlProfileCache = profile;
+      if (driveBiasInput) {
+        driveBiasInput.value = profile.drive_bias ?? 1.0;
+        driveBiasValue.textContent = `${Number(profile.drive_bias ?? 1).toFixed(2)}x`;
+      }
+      if (probeWindowInput) {
+        probeWindowInput.value = profile.probe_window_ns ?? 120;
+        probeWindowValue.textContent = fmtNs(profile.probe_window_ns ?? 120);
+      }
+      if (feedbackGainInput) {
+        feedbackGainInput.value = profile.feedback_gain ?? 0.35;
+        feedbackGainValue.textContent = Number(profile.feedback_gain ?? 0).toFixed(2);
+      }
+      if (safetyClampInput) {
+        safetyClampInput.value = profile.safety_clamp_ns ?? 600;
+        safetyClampValue.textContent = fmtNs(profile.safety_clamp_ns ?? 0);
+      }
+      if (tracerPersistenceInput) {
+        tracerPersistenceInput.value = profile.tracer_persistence_ms ?? 420;
+        tracerPersistenceValue.textContent = fmtMs(profile.tracer_persistence_ms ?? 420);
+      }
+      if (thermalGuardToggle) thermalGuardToggle.checked = !!profile.thermal_guard_enabled;
+      if (controlNotesInput) controlNotesInput.value = profile.notes || '';
+      setTracerPersistence(profile.tracer_persistence_ms ?? 420);
+      if (controlMeta) {
+        controlMeta.textContent = `drive=${Number(profile.drive_bias ?? 1).toFixed(2)} · feedback=${Number(profile.feedback_gain ?? 0).toFixed(2)} · clamp=${fmtNs(profile.safety_clamp_ns ?? 0)}`;
+      }
+    }
+
+    function collectControlPayload() {
+      return {
+        drive_bias: Number(driveBiasInput?.value || 1.0),
+        probe_window_ns: Number(probeWindowInput?.value || 120),
+        feedback_gain: Number(feedbackGainInput?.value || 0),
+        safety_clamp_ns: Number(safetyClampInput?.value || 0),
+        thermal_guard_enabled: Boolean(thermalGuardToggle?.checked),
+        tracer_persistence_ms: Number(tracerPersistenceInput?.value || 420),
+        notes: (controlNotesInput?.value || '').trim() || null,
+      };
+    }
+
+    function wireControlInput(input, valueEl, formatter) {
+      if (!input || !valueEl) return;
+      input.addEventListener('input', () => {
+        const v = Number(input.value || 0);
+        valueEl.textContent = formatter(v);
+        if (input === tracerPersistenceInput) setTracerPersistence(v);
+      });
+    }
+
+    async function loadControlProfile() {
+      try {
+        const profile = await apiGet('/controls/profile');
+        applyControlProfileToUi(profile);
+        if (controlStatus) controlStatus.textContent = 'Loaded from backend.';
+      } catch (err) {
+        if (controlStatus) controlStatus.textContent = `Could not load controls (${err.message})`;
+      }
+    }
+
+    async function saveControlProfile() {
+      const payload = collectControlPayload();
+      if (applyControlsBtn) applyControlsBtn.disabled = true;
+      if (controlStatus) controlStatus.textContent = 'Saving…';
+      try {
+        const profile = await apiPost('/controls/profile', payload);
+        applyControlProfileToUi(profile);
+        if (controlStatus) controlStatus.textContent = 'Controls pinned to backend profile.';
+      } catch (err) {
+        if (controlStatus) controlStatus.textContent = `Save failed: ${err.message}`;
+      } finally {
+        if (applyControlsBtn) applyControlsBtn.disabled = false;
+      }
+    }
+
     // --------------------------------------------
     // Visual KPI mapping (console scene)
     // --------------------------------------------
@@ -1461,6 +1731,10 @@
       const fidelity = (kpis.fidelity == null) ? null : Number(kpis.fidelity);
       const latency = (kpis.latency_us == null) ? null : Number(kpis.latency_us);
       const backaction = (kpis.backaction == null) ? null : Number(kpis.backaction);
+
+      if (run?.control_profile?.tracer_persistence_ms) {
+        setTracerPersistence(Number(run.control_profile.tracer_persistence_ms));
+      }
 
       const atm = document.getElementById('blochAtmosphere');
       const noise = document.getElementById('blochNoise');
@@ -1707,6 +1981,9 @@
       const tdLat = document.createElement('td');
       tdLat.textContent = (run.kpis?.latency_us == null) ? '–' : `${Number(run.kpis.latency_us).toFixed(1)} µs`;
 
+      const tdCtrl = document.createElement('td');
+      tdCtrl.textContent = summarizeControlProfile(run.control_profile);
+
       const tdErr = document.createElement('td');
       tdErr.textContent = run?.error_detail?.code || '—';
       if (run?.error_detail?.code) tdErr.title = run.error_detail.code;
@@ -1723,6 +2000,7 @@
       tr.appendChild(tdHw);
       tr.appendChild(tdFid);
       tr.appendChild(tdLat);
+      tr.appendChild(tdCtrl);
       tr.appendChild(tdErr);
       tr.appendChild(tdStatus);
 
@@ -1782,6 +2060,11 @@
           if (!Number.isFinite(existing) || existing <= 0) shotInput.value = String(DEFAULT_SHOT_BUDGET);
         }
 
+        if (h?.control_profile) {
+          applyControlProfileToUi(h.control_profile);
+          if (controlStatus) controlStatus.textContent = 'Live control profile loaded from /health.';
+        }
+
         setRunStatus(`Backend: connected (${API_BASE}) · env=${h.env ?? 'unknown'}`);
 
         // Targets
@@ -1818,7 +2101,7 @@
           if (recentRunsCache.length === 0) {
             const tr = document.createElement('tr');
             const td = document.createElement('td');
-            td.colSpan = 7;
+            td.colSpan = 8;
             td.textContent = 'No runs yet.';
             td.className = 'hint';
             tr.appendChild(td);
@@ -1842,7 +2125,7 @@
       if (!recentRunsCache || recentRunsCache.length === 0) {
         const tr = document.createElement('tr');
         const td = document.createElement('td');
-        td.colSpan = 8;
+        td.colSpan = 9;
         td.textContent = 'No runs loaded.';
         td.className = 'hint';
         tr.appendChild(td);
@@ -1916,6 +2199,8 @@
       const preset = presetSelect.value;
       const hardware_target = hardwareSelect.value;
 
+      const control_overrides = collectControlPayload();
+
       let shot_budget = Number.parseInt(String(shotInput.value || ''), 10);
       if (!Number.isFinite(shot_budget) || shot_budget <= 0) shot_budget = DEFAULT_SHOT_BUDGET;
       shot_budget = Math.min(Math.max(shot_budget, 1), MAX_SHOTS_PER_EXPERIMENT);
@@ -1926,7 +2211,7 @@
       setRunStatus('Running preset…');
 
       try {
-        const run = await apiPost('/experiments/run', { preset, hardware_target, shot_budget, notes });
+        const run = await apiPost('/experiments/run', { preset, hardware_target, shot_budget, notes, control_overrides });
         lastRun = run;
 
         // Update labels
@@ -1966,6 +2251,7 @@
         detailsHeader.textContent = 'No experiment selected yet. Go to Experiments and click a row.';
         detailsInterpretation.textContent = 'Select a run to see a plain-language summary here.';
         detailsJson.textContent = '{}';
+        if (detailsControlProfile) detailsControlProfile.textContent = 'Active controls: —';
         applyRunToKpis({ kpis: {} }, DETAILS_KPI_IDS);
         return;
       }
@@ -1978,6 +2264,9 @@
         const display = Object.assign({}, run);
         if (run.error_detail) display.error_detail = run.error_detail;
         detailsJson.textContent = JSON.stringify(display, null, 2);
+        if (detailsControlProfile) {
+          detailsControlProfile.textContent = `Active controls: ${summarizeControlProfile(run.control_profile)}`;
+        }
         applyRunToKpis(run, DETAILS_KPI_IDS);
         // Update cache entries so tables show error codes for legacy runs
         recentRunsCache = recentRunsCache.map(r => (r.id === run.id ? run : r));
@@ -1988,6 +2277,9 @@
         detailsHeader.textContent = `Could not load id=${selectedExperimentId}`;
         detailsInterpretation.textContent = `Error: ${err.message}`;
         detailsJson.textContent = '{}';
+        if (detailsControlProfile) {
+          detailsControlProfile.textContent = 'Active controls: —';
+        }
       }
     }
 
@@ -2085,6 +2377,14 @@
     agentInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') agentSend.click();
     });
+
+    wireControlInput(driveBiasInput, driveBiasValue, v => `${Number(v).toFixed(2)}x`);
+    wireControlInput(probeWindowInput, probeWindowValue, fmtNs);
+    wireControlInput(feedbackGainInput, feedbackGainValue, v => Number(v).toFixed(2));
+    wireControlInput(safetyClampInput, safetyClampValue, fmtNs);
+    wireControlInput(tracerPersistenceInput, tracerPersistenceValue, fmtMs);
+    if (applyControlsBtn) applyControlsBtn.addEventListener('click', saveControlProfile);
+    applyControlProfileToUi(collectControlPayload());
 
     hardwareSelect.addEventListener('change', () => {
       sceneHardwareLabel.textContent = hardwareSelect.options[hardwareSelect.selectedIndex]?.text || hardwareSelect.value;

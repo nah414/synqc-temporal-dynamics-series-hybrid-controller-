@@ -4,6 +4,8 @@ from enum import Enum
 from typing import List, Optional
 from pydantic import BaseModel, Field
 
+from .control_profiles import ControlProfile
+
 
 class ExperimentPreset(str, Enum):
     """High-level experiment presets supported by the SynQc engine."""
@@ -75,6 +77,10 @@ class RunExperimentRequest(BaseModel):
         default=None,
         description="Optional free-form notes from the client."
     )
+    control_overrides: Optional[ControlProfile] = Field(
+        default=None,
+        description="Optional manual control profile to apply for this run.",
+    )
 
 
 class RunExperimentResponse(BaseModel):
@@ -86,6 +92,7 @@ class RunExperimentResponse(BaseModel):
     kpis: KpiBundle
     created_at: float
     notes: Optional[str] = None
+    control_profile: Optional[ControlProfile] = None
     error_detail: Optional[dict] = None
 
 
@@ -124,6 +131,7 @@ class ExperimentSummary(BaseModel):
     hardware_target: str
     kpis: KpiBundle
     created_at: float
+    control_profile: Optional[ControlProfile] = None
     error_detail: Optional[dict] = None
 
 

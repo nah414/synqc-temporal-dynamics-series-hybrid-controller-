@@ -54,6 +54,7 @@ class ExperimentStore:
                     hardware_target=r.hardware_target,
                     kpis=r.kpis,
                     created_at=r.created_at,
+                    control_profile=r.control_profile,
                     error_detail=r.error_detail,
                 )
                 for r in runs_sorted[:limit]

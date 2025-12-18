@@ -6,7 +6,7 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 import pytest
 try:
     from fastapi.testclient import TestClient
-except RuntimeError:
+except Exception:  # noqa: BLE001 - allow environments without full httpx support
     TestClient = None  # type: ignore
 
 from synqc_backend.api import app, settings  # noqa: E402

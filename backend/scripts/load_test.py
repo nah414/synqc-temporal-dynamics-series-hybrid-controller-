@@ -11,8 +11,9 @@ Example:
         --metrics-url http://127.0.0.1:9000/metrics --runs 30 --concurrency 6 \
         --api-key "super-secret" --session-id "local-load"
 
-The script is intentionally dependency-light (httpx only) and prints a summary
-suitable for CI smoke checks.
+The script is intentionally dependency-light. We prefer the real ``httpx``
+client, but will fall back to a bundled stub if a wheel is not cached in CI or
+the environment blocks outbound downloads.
 """
 from __future__ import annotations
 
@@ -23,7 +24,9 @@ import time
 from typing import Any
 import sys
 
-import httpx
+from synqc_backend.vendor.httpx_loader import load_httpx
+
+httpx = load_httpx()
 
 
 def _parse_metric(text: str, metric: str, labels: dict[str, str] | None = None) -> float | None:
@@ -242,6 +245,7 @@ def _summarize_metrics(before: str, after: str) -> list[str]:
         print("  WARNING: Redis disconnected during test")
         issues.append("Redis disconnected per metrics")
     return issues
+
 
 async def main() -> None:
     args = _load_args()

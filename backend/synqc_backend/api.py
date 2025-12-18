@@ -9,6 +9,7 @@ import atexit
 
 from .budget import BudgetTracker
 from .config import settings
+from .control_profiles import ControlProfileStore, ControlProfileUpdate, ControlProfile
 from .engine import SynQcEngine
 from .hardware_backends import list_backends
 from .jobs import JobQueue
@@ -34,7 +35,8 @@ store = ExperimentStore(max_entries=512, persist_path=persist_path)
 budget_tracker = BudgetTracker(
     redis_url=settings.redis_url, session_ttl_seconds=settings.session_budget_ttl_seconds
 )
-engine = SynQcEngine(store=store, budget_tracker=budget_tracker)
+control_store = ControlProfileStore(persist_path=Path("./synqc_controls.json"))
+engine = SynQcEngine(store=store, budget_tracker=budget_tracker, control_store=control_store)
 queue = JobQueue(engine.run_experiment, max_workers=settings.worker_pool_size, store=store)
 metrics_exporter = MetricsExporter(
     budget_tracker=budget_tracker,
@@ -119,7 +121,25 @@ def health() -> dict:
         "presets": [p.value for p in ExperimentPreset],
         "budget_tracker": budget_tracker.health_summary(),
         "queue": queue.stats(),
+        "control_profile": control_store.get(),
     }
+
+
+@app.get("/controls/profile", response_model=ControlProfile, tags=["controls"])
+def get_control_profile(_: None = Depends(require_api_key)) -> ControlProfile:
+    """Return the active manual control profile."""
+
+    return control_store.get()
+
+
+@app.post("/controls/profile", response_model=ControlProfile, tags=["controls"])
+def update_control_profile(
+    patch: ControlProfileUpdate,
+    _: None = Depends(require_api_key),
+) -> ControlProfile:
+    """Update the manual control profile and persist it."""
+
+    return control_store.update(patch)
 
 
 @app.get("/hardware/targets", response_model=HardwareTargetsResponse, tags=["hardware"])

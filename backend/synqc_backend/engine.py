@@ -6,6 +6,7 @@ from typing import Tuple
 
 from .budget import BudgetTracker
 from .config import settings
+from .control_profiles import ControlProfile, ControlProfileStore
 from .hardware_backends import get_backend
 from .models import (
     ExperimentPreset,
@@ -34,9 +35,15 @@ class SynQcEngine:
       - Aggregate KPIs and store experiment records.
     """
 
-    def __init__(self, store: ExperimentStore, budget_tracker: BudgetTracker) -> None:
+    def __init__(
+        self,
+        store: ExperimentStore,
+        budget_tracker: BudgetTracker,
+        control_store: ControlProfileStore,
+    ) -> None:
         self._store = store
         self._budget_tracker = budget_tracker
+        self._control_store = control_store
 
     def _apply_shot_guardrails(self, req: RunExperimentRequest, session_id: str) -> Tuple[int, bool]:
         """Determine effective shot budget and whether to flag a warning.
@@ -65,13 +72,46 @@ class SynQcEngine:
 
         return shot_budget, warn_for_target
 
+    def _apply_control_profile(self, kpis: KpiBundle, controls: ControlProfile) -> KpiBundle:
+        """Map engineering controls to KPI adjustments.
+
+        These adjustments are intentionally subtle so the simulated numbers stay
+        within realistic bounds while still reflecting operator intent.
+        """
+
+        adjusted = kpis.model_copy(deep=True)
+
+        # Drive bias can nudge fidelity upward (toward ceiling) but may add backaction
+        if adjusted.fidelity is not None:
+            fidelity_gain = 0.08 * (controls.drive_bias - 1.0)
+            adjusted.fidelity = max(0.0, min(1.0, adjusted.fidelity + fidelity_gain))
+
+        if adjusted.backaction is not None:
+            backaction_delta = 0.05 * ((controls.probe_window_ns / 500.0) - 1.0)
+            if not controls.thermal_guard_enabled:
+                backaction_delta += 0.04
+            adjusted.backaction = max(0.0, min(1.0, adjusted.backaction + backaction_delta))
+
+        if adjusted.latency_us is not None:
+            latency_scale = 1.0 - min(controls.feedback_gain * 0.04, 0.25)
+            adjusted.latency_us = max(1.0, adjusted.latency_us * latency_scale)
+
+        # Clamp status to WARN if safety clamp is disabled and backaction is high
+        if adjusted.backaction is not None and adjusted.backaction > 0.32:
+            if not controls.thermal_guard_enabled or controls.safety_clamp_ns == 0:
+                adjusted.status = ExperimentStatus.WARN
+
+        return adjusted
+
     def run_experiment(self, req: RunExperimentRequest, session_id: str) -> RunExperimentResponse:
         """Run a high-level SynQc experiment according to the request."""
         effective_shot_budget, warn_for_target = self._apply_shot_guardrails(req, session_id)
 
         backend = get_backend(req.hardware_target)
         start = time.time()
+        active_controls = req.control_overrides or self._control_store.get()
         kpis = backend.run_experiment(req.preset, effective_shot_budget)
+        kpis = self._apply_control_profile(kpis, active_controls)
         end = time.time()
 
         # Fill missing KPI fields and tweak status if guardrails were hit
@@ -94,6 +134,7 @@ class SynQcEngine:
             kpis=kpis,
             created_at=end,
             notes=req.notes,
+            control_profile=active_controls,
         )
         self._store.add(run)
         return run
