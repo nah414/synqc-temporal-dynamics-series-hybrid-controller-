@@ -4,6 +4,8 @@ import time
 import uuid
 from typing import Tuple
 
+import random
+
 from .budget import BudgetTracker
 from .config import settings
 from .control_profiles import ControlProfile, ControlProfileStore
@@ -16,6 +18,7 @@ from .models import (
     RunExperimentResponse,
     WorkflowStep,
 )
+from .qubit_usage import SessionQubitTracker
 from .storage import ExperimentStore
 
 
@@ -41,10 +44,12 @@ class SynQcEngine:
         store: ExperimentStore,
         budget_tracker: BudgetTracker,
         control_store: ControlProfileStore,
+        usage_tracker: SessionQubitTracker | None = None,
     ) -> None:
         self._store = store
         self._budget_tracker = budget_tracker
         self._control_store = control_store
+        self._usage_tracker = usage_tracker
 
     def _apply_shot_guardrails(self, req: RunExperimentRequest, session_id: str) -> Tuple[int, bool]:
         """Determine effective shot budget and whether to flag a warning.
@@ -103,6 +108,52 @@ class SynQcEngine:
                 adjusted.status = ExperimentStatus.WARN
 
         return adjusted
+
+    def _estimate_qubits_used(
+        self,
+        req: RunExperimentRequest,
+        kpis: KpiBundle,
+        effective_shot_budget: int,
+    ) -> int:
+        """Estimate how many qubits were entangled for a run.
+
+        The estimation is deterministic per request to keep UI/telemetry stable while
+        still reacting to preset, hardware, and control intent.
+        """
+
+        bounds = {
+            "sim_local": (6, 18),
+            "aws_braket": (20, 48),
+            "ibm_quantum": (16, 44),
+            "azure_quantum": (14, 38),
+            "ionq_labs": (12, 32),
+            "rigetti_qcs": (18, 40),
+        }
+        min_q, max_q = bounds.get(req.hardware_target, (10, 36))
+
+        # Scale by preset complexity
+        preset_scale = {
+            ExperimentPreset.LATENCY: 0.45,
+            ExperimentPreset.HEALTH: 0.65,
+            ExperimentPreset.DPD_DEMO: 0.5,
+            ExperimentPreset.BACKEND_COMPARE: 0.9,
+        }.get(req.preset, 0.65)
+
+        # Entanglement/backaction can bump the footprint
+        backaction = kpis.backaction if kpis.backaction is not None else 0.2
+        backaction_scale = min(1.0, max(0.0, backaction / 0.6))
+
+        # Shot budget hints at workload breadth
+        shot_scale = min(1.0, (effective_shot_budget / max(1, settings.max_shots_per_experiment)))
+
+        rng = random.Random()
+        rng.seed(f"{req.hardware_target}:{req.preset}:{effective_shot_budget}:{backaction}")
+
+        base_span = max_q - min_q
+        scaled = min_q + int(base_span * (0.35 + preset_scale * 0.35 + backaction_scale * 0.2 + shot_scale * 0.1))
+        jitter = rng.randint(-2, 3)
+
+        return max(1, min(max_q, scaled + jitter))
 
     def _build_workflow_trace(
         self,
@@ -198,6 +249,8 @@ class SynQcEngine:
         kpis = self._apply_control_profile(kpis, active_controls)
         end = time.time()
 
+        qubits_used = self._estimate_qubits_used(req, kpis, effective_shot_budget)
+
         # Fill missing KPI fields and tweak status if guardrails were hit
         if kpis.shot_budget == 0:
             kpis.shot_budget = effective_shot_budget
@@ -217,9 +270,18 @@ class SynQcEngine:
             hardware_target=req.hardware_target,
             kpis=kpis,
             created_at=end,
+            qubits_used=qubits_used,
             notes=req.notes,
             control_profile=active_controls,
             workflow_trace=self._build_workflow_trace(req, kpis, active_controls),
         )
+
+        if self._usage_tracker:
+            try:
+                self._usage_tracker.record(session_id=session_id, qubits_used=qubits_used)
+            except Exception:
+                # Usage telemetry should not block run completion.
+                pass
+
         self._store.add(run)
         return run

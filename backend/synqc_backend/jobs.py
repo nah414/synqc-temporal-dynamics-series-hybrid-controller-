@@ -98,6 +98,7 @@ class JobQueue:
             hardware_target=req.hardware_target,
             kpis=kpis,
             created_at=record.finished_at or time.time(),
+            qubits_used=0,
             notes=req.notes,
             control_profile=req.control_overrides,
             error_detail=record.error_detail,
