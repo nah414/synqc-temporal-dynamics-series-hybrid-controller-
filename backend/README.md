@@ -62,8 +62,12 @@ Then you can access:
 - API docs: http://localhost:8001/docs
 - Health check: `GET /health`
 - Hardware targets: `GET /hardware/targets`
+- Engineering controls: `GET/POST /controls/profile`
 - Submit experiment run: `POST /runs` (or legacy `POST /experiments/run`)
 - Poll run status: `GET /runs/{id}`
+- Load test helper: `python backend/scripts/load_test.py` (prefers cached `httpx` wheel in `backend/synqc_backend/vendor/httpx_wheels/`)
+  - In CI, set `SYNQC_HTTPX_VENDOR=backend/synqc_backend/vendor/httpx_wheels/` (or replace the cached wheel with the official package) so the load test uses the real client rather than the stub.
+  - Keep the vendored wheel current (e.g., update to the latest httpx patch release when bumping dependencies) to stay aligned with FastAPI/Starlette testclient expectations.
 
 ---
 
@@ -95,6 +99,16 @@ For each experiment run, the backend returns a `KpiBundle` with:
 - `status` ("ok" | "warn" | "fail").
 
 These map directly onto the tiles in the SynQc TDS frontend.
+
+### Engineering controls
+
+Operators can tune a lightweight **control profile** that influences runs and the
+frontend visualization. The active profile is exposed via `/health` and can be
+managed with `GET/POST /controls/profile`.
+
+For CI environments without outbound package access, drop a cached wheel such as
+`httpx-0.27.2-py3-none-any.whl` into `backend/synqc_backend/vendor/httpx_wheels/`
+so the load test can run without skipping or downloads.
 
 ### Safety & Guardrails
 

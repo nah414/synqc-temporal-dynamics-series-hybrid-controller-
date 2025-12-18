@@ -98,6 +98,7 @@ class JobQueue:
             kpis=kpis,
             created_at=record.finished_at or time.time(),
             notes=req.notes,
+            control_profile=req.control_overrides,
             error_detail=record.error_detail,
         )
         try:
