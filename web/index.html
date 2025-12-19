@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>SynQc TDS — Temporal Dynamics Console v0.4</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <script src="assets/mobius-image.js"></script>
+  <link rel="stylesheet" href="assets/background.css" />
   <style>
     :root {
       --bg-main: #030308;
@@ -43,47 +43,9 @@
       pointer-events: none;
       z-index: 0;
     }
-    .mobius-layer{
-      position: fixed;
-      inset: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      pointer-events: none;
-      z-index: 0;
-      opacity: 0.96;
-      mix-blend-mode: screen;
-    }
-    .mobius-wrap{
-      width: min(96vw, var(--hero-visual-max-width));
-      max-width: var(--hero-visual-max-width);
-      aspect-ratio: 16 / 7.5;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .mobius-picture{
-      width: 100%;
-      height: 100%;
-      display: block;
-    }
-    .mobius-image{
-      width: 100%;
-      height: 100%;
-      display: block;
-      object-fit: contain;
-    }
     .spectralized {
       filter: hue-rotate(var(--spectral-shift, 0deg)) saturate(1.06);
       transition: filter 0.35s ease;
-    }
-    .mobius-layer::before{
-      content: "";
-      position: absolute;
-      inset: 0;
-      pointer-events: none;
-      background: radial-gradient(circle at 50% 60%, rgba(3,4,12,0.45), transparent 65%);
-      mix-blend-mode: screen;
     }
     .particle {
       position: absolute;
@@ -109,17 +71,6 @@
       50% { transform: translate3d(40px, -60px, 0) scale(1.15); }
       80% { opacity: 0.4; }
       100%{ transform: translate3d(-20px,-120px,0) scale(0.9); opacity: 0; }
-    }
-    @media (prefers-reduced-motion: reduce) {
-      .particle-layer { display: none; }
-      .mobius-layer {
-        opacity: 0.4;
-        mix-blend-mode: normal;
-        filter: saturate(0.78) brightness(0.95);
-        background: radial-gradient(circle at 50% 60%, rgba(8,10,24,0.4), rgba(0,0,0,0.8));
-      }
-      .mobius-layer::before { display: none; }
-      .mobius-wrap { max-width: 960px; }
     }
     header {
       position: sticky;
@@ -1025,27 +976,7 @@
 <body>
     <div class="app">
       <div class="particle-layer spectralized" id="particleLayer"></div>
-      <div class="mobius-layer" aria-hidden="true">
-        <div class="mobius-wrap">
-          <picture class="mobius-picture">
-            <img
-              class="mobius-image"
-              id="mobiusImage"
-              alt="SynQc temporal dynamics ribbon"
-              loading="lazy"
-              decoding="async"
-              fetchpriority="low"
-            />
-          </picture>
-        </div>
-      </div>
-
-    <script>
-      if (window.MOBIUS_IMAGE_DATA) {
-        const mobiusImg = document.getElementById('mobiusImage');
-        if (mobiusImg) mobiusImg.src = window.MOBIUS_IMAGE_DATA;
-      }
-    </script>
+      <div class="background-layer" aria-hidden="true"></div>
 
     <header>
       <div class="brand">
