@@ -1771,6 +1771,15 @@
 
     let activeWorkflowTrace = [];
     let workflowTimers = [];
+    let pendingWorkflowTrace = null;
+    let workflowRenderRaf = null;
+    let lastWorkflowSignature = '';
+    let neuralNodePool = [];
+    let neuralLinkPool = [];
+    let refreshTimer = null;
+    let refreshResolvers = [];
+    const historyRowPool = [];
+    const experimentsRowPool = [];
 
     let selectedExperimentId = null;
     let qubitDemoInterval = null;
@@ -2229,20 +2238,49 @@
       });
     }
 
+    function workflowTraceSignature(trace) {
+      if (!Array.isArray(trace)) return '';
+      return trace.map(step => `${step.id || step.label}-${step.percent_complete}`).join('|');
+    }
+
+    function scheduleWorkflowRender(trace) {
+      pendingWorkflowTrace = trace;
+      if (workflowRenderRaf) return;
+      workflowRenderRaf = requestAnimationFrame(() => {
+        workflowRenderRaf = null;
+        if (!pendingWorkflowTrace || !neuralWeb) return;
+
+        const width = neuralWeb.clientWidth || 600;
+        const height = neuralWeb.clientHeight || 220;
+        const signature = `${width}x${height}:${workflowTraceSignature(pendingWorkflowTrace)}`;
+        if (signature === lastWorkflowSignature) return;
+        lastWorkflowSignature = signature;
+
+        renderNeuralNetwork(pendingWorkflowTrace);
+      });
+    }
+
     function renderNeuralNetwork(trace) {
       if (!neuralWeb) return;
-      neuralWeb.innerHTML = '';
-      if (!trace || !trace.length) return;
+      if (!trace || !trace.length) {
+        neuralNodePool.forEach(node => node.style.display = 'none');
+        neuralLinkPool.forEach(link => link.style.display = 'none');
+        return;
+      }
 
       const width = neuralWeb.clientWidth || 600;
       const height = neuralWeb.clientHeight || 220;
-      const spacing = width / (trace.length + 1);
-      const baseY = height * 0.5;
-      const amplitude = height * 0.22;
+      const stepCount = trace.length;
+      const paddingX = Math.max(28, width * 0.08);
+      const paddingY = Math.max(30, height * 0.22);
+      const innerWidth = Math.max(0, width - paddingX * 2);
+      const spacing = stepCount > 1 ? innerWidth / (stepCount - 1) : 0;
+      const baseY = Math.min(height - paddingY, Math.max(paddingY, height * 0.5));
+      const amplitude = Math.min(height * 0.18, Math.max(0, (height - paddingY * 2) / 2));
 
       let prev = null;
       trace.forEach((step, idx) => {
-        const x = spacing * (idx + 1);
+        const x = stepCount === 1 ? width * 0.5 : paddingX + spacing * idx;
         const y = baseY + Math.sin(idx * 1.18) * amplitude;
         const z = (idx % 3) * 12;
 
@@ -2251,29 +2289,47 @@
           const dy = y - prev.y;
           const length = Math.sqrt(dx * dx + dy * dy);
           const angle = Math.atan2(dy, dx) * 180 / Math.PI;
-          const link = document.createElement('div');
-          link.className = 'neural-link';
+          let link = neuralLinkPool[idx - 1];
+          if (!link) {
+            link = document.createElement('div');
+            link.className = 'neural-link';
+            neuralLinkPool[idx - 1] = link;
+          }
+          if (!link.parentNode) neuralWeb.appendChild(link);
           link.style.width = `${length}px`;
           link.style.transform = `translate(${prev.x}px, ${prev.y}px) rotate(${angle}deg)`;
-          neuralWeb.appendChild(link);
+          link.style.display = '';
         }
 
-        const node = document.createElement('div');
-        node.className = 'neural-node';
+        let node = neuralNodePool[idx];
+        if (!node) {
+          node = document.createElement('div');
+          node.className = 'neural-node';
+          const label = document.createElement('div');
+          label.className = 'node-label';
+          node.appendChild(label);
+          node.labelEl = label;
+          neuralNodePool[idx] = node;
+        }
+        if (!node.parentNode) neuralWeb.appendChild(node);
+        node.classList.remove('active', 'completed');
         node.dataset.stepId = step.id || `step-${idx + 1}`;
         node.style.setProperty('--x', `${x}px`);
         node.style.setProperty('--y', `${y}px`);
         node.style.setProperty('--z', `${z}px`);
         node.title = step.description || step.label || '';
+        node.style.display = '';
 
-        const label = document.createElement('div');
-        label.className = 'node-label';
-        label.textContent = step.label || `Stage ${idx + 1}`;
-        node.appendChild(label);
-
-        neuralWeb.appendChild(node);
+        node.labelEl.textContent = step.label || `Stage ${idx + 1}`;
         prev = { x, y };
       });
+
+      for (let i = trace.length; i < neuralNodePool.length; i += 1) {
+        neuralNodePool[i].style.display = 'none';
+      }
+      for (let i = Math.max(0, trace.length - 1); i < neuralLinkPool.length; i += 1) {
+        neuralLinkPool[i].style.display = 'none';
+      }
     }
 
     function playWorkflowTrace(trace) {
@@ -2319,7 +2375,7 @@
 
     function primeWorkflowFromRun(run) {
       activeWorkflowTrace = normalizeWorkflowTrace(run);
-      renderNeuralNetwork(activeWorkflowTrace);
+      scheduleWorkflowRender(activeWorkflowTrace);
       playWorkflowTrace(activeWorkflowTrace);
     }
 
@@ -2481,10 +2537,6 @@
     // --------------------------------------------
     // Table rendering + filtering
     // --------------------------------------------
-    function clearTbody(tbody) {
-      while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
-    }
-
     function applyFilterToBody(tbody, filter) {
       const rows = tbody.querySelectorAll('tr');
       rows.forEach(row => {
@@ -2499,41 +2551,21 @@
       });
     }
 
-    function createRunRow(run, { includeId = false } = {}) {
+    function buildRunRowStructure(includeId) {
       const tr = document.createElement('tr');
-      tr.dataset.preset = run.preset;
-      tr.dataset.id = run.id;
+      tr.dataset.includeId = includeId ? '1' : '0';
 
       const tdTime = document.createElement('td');
-      tdTime.textContent = fmtTimeFromEpochSeconds(run.created_at);
-
       const tdId = document.createElement('td');
-      const shortId = (run.id || '').split('-')[0] || run.id;
-      tdId.textContent = includeId ? shortId : '';
-
       const tdPreset = document.createElement('td');
-      tdPreset.textContent = presetLabel(run.preset);
-
       const tdHw = document.createElement('td');
-      tdHw.textContent = run.hardware_target;
-
       const tdFid = document.createElement('td');
-      tdFid.textContent = (run.kpis?.fidelity == null) ? '–' : Number(run.kpis.fidelity).toFixed(3);
-
       const tdLat = document.createElement('td');
-      tdLat.textContent = (run.kpis?.latency_us == null) ? '–' : `${Number(run.kpis.latency_us).toFixed(1)} µs`;
-
       const tdCtrl = document.createElement('td');
-      tdCtrl.textContent = summarizeControlProfile(run.control_profile);
-
       const tdErr = document.createElement('td');
-      tdErr.textContent = run?.error_detail?.code || '—';
-      if (run?.error_detail?.code) tdErr.title = run.error_detail.code;
-
       const tdStatus = document.createElement('td');
+
       const pill = document.createElement('span');
-      pill.className = `status-pill ${statusClass(run.kpis?.status)}`;
-      pill.textContent = statusLabel(run.kpis?.status);
       tdStatus.appendChild(pill);
 
       tr.appendChild(tdTime);
@@ -2546,8 +2578,79 @@
       tr.appendChild(tdErr);
       tr.appendChild(tdStatus);
 
-      tr.addEventListener('click', () => openDetails(run.id));
+      tr._cells = {
+        tdTime,
+        tdId,
+        tdPreset,
+        tdHw,
+        tdFid,
+        tdLat,
+        tdCtrl,
+        tdErr,
+        pill,
+      };
       return tr;
+    }
+
+    function updateRunRow(tr, run, includeId) {
+      const cells = tr._cells;
+      tr.dataset.preset = run.preset;
+      tr.dataset.id = run.id;
+
+      cells.tdTime.textContent = fmtTimeFromEpochSeconds(run.created_at);
+
+      if (includeId) {
+        const shortId = (run.id || '').split('-')[0] || run.id;
+        cells.tdId.textContent = shortId;
+      }
+
+      cells.tdPreset.textContent = presetLabel(run.preset);
+      cells.tdHw.textContent = run.hardware_target;
+      cells.tdFid.textContent = (run.kpis?.fidelity == null) ? '–' : Number(run.kpis.fidelity).toFixed(3);
+      cells.tdLat.textContent = (run.kpis?.latency_us == null) ? '–' : `${Number(run.kpis.latency_us).toFixed(1)} µs`;
+      cells.tdCtrl.textContent = summarizeControlProfile(run.control_profile);
+      cells.tdErr.textContent = run?.error_detail?.code || '—';
+      cells.tdErr.title = run?.error_detail?.code || '';
+      cells.pill.className = `status-pill ${statusClass(run.kpis?.status)}`;
+      cells.pill.textContent = statusLabel(run.kpis?.status);
+
+      tr.onclick = () => openDetails(run.id);
+      tr.style.display = '';
+    }
+
+    function renderRunTable(tbody, runs, { includeId, pool, emptyMessage, emptyColspan }) {
+      const items = Array.isArray(runs) ? runs : [];
+      if (!items.length) {
+        pool.forEach(row => { row.style.display = 'none'; });
+        if (!tbody._hintRow) {
+          const tr = document.createElement('tr');
+          const td = document.createElement('td');
+          td.colSpan = emptyColspan;
+          td.className = 'hint';
+          tr.appendChild(td);
+          tbody._hintRow = tr;
+        }
+        tbody._hintRow.firstChild.textContent = emptyMessage;
+        if (!tbody._hintRow.parentNode) tbody.appendChild(tbody._hintRow);
+        tbody._hintRow.style.display = '';
+        return;
+      }
+
+      if (tbody._hintRow) tbody._hintRow.style.display = 'none';
+
+      items.forEach((run, idx) => {
+        let row = pool[idx];
+        if (!row) {
+          row = buildRunRowStructure(includeId);
+          pool[idx] = row;
+        }
+        updateRunRow(row, run, includeId);
+        if (!row.parentNode) tbody.appendChild(row);
+      });
+
+      for (let i = items.length; i < pool.length; i += 1) {
+        pool[i].style.display = 'none';
+      }
     }
 
     let consoleFilter = 'all';
@@ -2639,18 +2742,12 @@
           recentRunsCache = Array.isArray(recents) ? recents : [];
 
           // Console history
-          clearTbody(historyBody);
-          if (recentRunsCache.length === 0) {
-            const tr = document.createElement('tr');
-            const td = document.createElement('td');
-            td.colSpan = 8;
-            td.textContent = 'No runs yet.';
-            td.className = 'hint';
-            tr.appendChild(td);
-            historyBody.appendChild(tr);
-          } else {
-            recentRunsCache.forEach(r => historyBody.appendChild(createRunRow(r, { includeId: false })));
-          }
+          renderRunTable(historyBody, recentRunsCache, {
+            includeId: false,
+            pool: historyRowPool,
+            emptyMessage: 'No runs yet.',
+            emptyColspan: 8,
+          });
           applyFilterToBody(historyBody, consoleFilter);
 
           // Experiments page table
@@ -2670,19 +2767,26 @@
       await refreshQubitPanel();
     }
 
+    function debouncedRefreshFromBackend(delay = 200) {
+      return new Promise(resolve => {
+        refreshResolvers.push(resolve);
+        if (refreshTimer) clearTimeout(refreshTimer);
+        refreshTimer = setTimeout(async () => {
+          refreshTimer = null;
+          await refreshFromBackend();
+          refreshResolvers.forEach(r => r());
+          refreshResolvers = [];
+        }, delay);
+      });
+    }
+
     function renderExperimentsTable() {
-      clearTbody(experimentsBody);
-      if (!recentRunsCache || recentRunsCache.length === 0) {
-        const tr = document.createElement('tr');
-        const td = document.createElement('td');
-        td.colSpan = 9;
-        td.textContent = 'No runs loaded.';
-        td.className = 'hint';
-        tr.appendChild(td);
-        experimentsBody.appendChild(tr);
-      } else {
-        recentRunsCache.forEach(r => experimentsBody.appendChild(createRunRow(r, { includeId: true })));
-      }
+      renderRunTable(experimentsBody, recentRunsCache, {
+        includeId: true,
+        pool: experimentsRowPool,
+        emptyMessage: 'No runs loaded.',
+        emptyColspan: 9,
+      });
       applyFilterToBody(experimentsBody, experimentsFilter);
     }
 
@@ -2843,12 +2947,12 @@
     // Experiments / Hardware page controls
     // --------------------------------------------
     refreshExperimentsBtn.addEventListener('click', async () => {
-      await refreshFromBackend();
+      await debouncedRefreshFromBackend();
       renderExperimentsTable();
     });
 
     refreshHardwareBtn.addEventListener('click', async () => {
-      await refreshFromBackend();
+      await debouncedRefreshFromBackend();
       renderHardwareList();
     });
 
@@ -2857,7 +2961,7 @@
       if (recentRunsCache && recentRunsCache.length) {
         renderExperimentsTable();
       } else {
-        refreshFromBackend();
+        debouncedRefreshFromBackend();
       }
     }
 
@@ -2865,7 +2969,7 @@
       if (hardwareTargetsCache && hardwareTargetsCache.length) {
         renderHardwareList();
       } else {
-        refreshFromBackend();
+        debouncedRefreshFromBackend();
       }
     }
 
@@ -2950,6 +3054,17 @@
       scenePresetLabel.textContent = presetLabel(val);
       updateInterpretationText();
     });
+
+    if (neuralWeb) {
+      if ('ResizeObserver' in window) {
+        const neuralObserver = new ResizeObserver(() => {
+          scheduleWorkflowRender(activeWorkflowTrace);
+        });
+        neuralObserver.observe(neuralWeb);
+      } else {
+        window.addEventListener('resize', () => scheduleWorkflowRender(activeWorkflowTrace));
+      }
+    }
 
     // --------------------------------------------
     // Boot
