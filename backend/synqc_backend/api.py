@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List
+from typing import List, Optional
+import secrets
 
 from fastapi import Depends, FastAPI, Header, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,6 +12,9 @@ from .budget import BudgetTracker
 from .config import settings
 from .control_profiles import ControlProfileStore, ControlProfileUpdate, ControlProfile
 from .engine import SynQcEngine
+from .auth import auth_router
+from .auth.store import AuthStore
+from .auth.deps import require_scopes
 from .hardware_backends import list_backends
 from .jobs import JobQueue
 from .metrics import MetricsExporter
@@ -35,7 +39,9 @@ from .storage import ExperimentStore
 persist_path = Path("./synqc_experiments.json")
 store = ExperimentStore(max_entries=512, persist_path=persist_path)
 budget_tracker = BudgetTracker(
-    redis_url=settings.redis_url, session_ttl_seconds=settings.session_budget_ttl_seconds
+    redis_url=settings.redis_url,
+    session_ttl_seconds=settings.session_budget_ttl_seconds,
+    fail_open_on_redis_error=settings.budget_fail_open_on_redis_error,
 )
 control_store = ControlProfileStore(persist_path=Path("./synqc_controls.json"))
 qubit_tracker = SessionQubitTracker(ttl_seconds=settings.session_budget_ttl_seconds)
@@ -45,7 +51,14 @@ engine = SynQcEngine(
     control_store=control_store,
     usage_tracker=qubit_tracker,
 )
-queue = JobQueue(engine.run_experiment, max_workers=settings.worker_pool_size, store=store)
+queue = JobQueue(
+    engine.run_experiment,
+    max_workers=settings.worker_pool_size,
+    store=store,
+    persistence_path=settings.job_queue_db_path,
+    job_timeout_seconds=settings.job_timeout_seconds,
+    max_pending=settings.job_queue_max_pending,
+)
 metrics_exporter = MetricsExporter(
     budget_tracker=budget_tracker,
     queue=queue,
@@ -64,25 +77,88 @@ app = FastAPI(
         "(health, latency, backend comparison, DPD demo) and returns KPIs.")
 )
 
+auth_store = AuthStore(settings.auth_db_path)
+app.state.auth_store = auth_store
+app.include_router(auth_router, prefix="/auth", tags=["auth"])
+
 def _cors_origins() -> list[str]:
     # Ensures we never accidentally allow "*" when credentials are enabled.
     return settings.cors_allow_origins or []
 
 
-def require_api_key(x_api_key: str | None = Header(default=None)) -> None:
-    """Simple API-key guard for execution and data endpoints."""
+def _extract_bearer_token(authorization: str) -> Optional[str]:
+    """
+    Parse Authorization header. Accepts:
+      Authorization: Bearer <token>
+    Returns token or None.
+    """
+    if not authorization:
+        return None
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer":
+        return None
+    token = token.strip()
+    return token or None
 
-    if settings.env == "dev" and not settings.require_api_key:
+
+def require_api_key(
+    x_api_key: str | None = Header(default=None, alias="X-Api-Key"),
+    authorization: str | None = Header(default=None, alias="Authorization"),
+) -> None:
+    """
+    Enforce API auth.
+
+    Accepted:
+      - X-Api-Key: <secret>
+      - Authorization: Bearer <secret>
+
+    This uses the same configured secret for both header types.
+    """
+    # Be defensive about settings shape so this patch won't crash if names differ slightly.
+    expected = getattr(settings, "api_key", None)
+    require = getattr(settings, "require_api_key", None)
+
+    # If the codebase has a boolean toggle, respect it.
+    # Otherwise, require auth when an api_key is configured.
+    if require is None:
+        require = bool(expected)
+
+    if not require:
         return
 
-    if not settings.api_key:
-        raise HTTPException(status_code=500, detail="Server missing API key configuration")
+    if not expected:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "code": "api_key_not_configured",
+                "message": "API key enforcement is enabled but no API key is configured on the server.",
+            },
+        )
 
-    if x_api_key != settings.api_key:
-        raise HTTPException(status_code=401, detail="Unauthorized")
+    # 1) X-Api-Key header
+    if x_api_key and secrets.compare_digest(x_api_key, expected):
+        return
+
+    # 2) Authorization: Bearer <token>
+    token = _extract_bearer_token(authorization or "")
+    if token and secrets.compare_digest(token, expected):
+        return
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail={
+            "code": "unauthorized",
+            "message": "Missing or invalid API credentials. Use X-Api-Key or Authorization: Bearer <token>.",
+        },
+        headers={"WWW-Authenticate": "Bearer"},
+    )
 
 
-def get_session_id(x_session_id: str | None = Header(default=None)) -> str:
+def get_session_id(
+    x_session_id: str | None = Header(default=None),
+    authorization: str | None = Header(default=None),
+    x_api_key: str | None = Header(default=None, alias="X-Api-Key"),
+) -> str:
     """Derive a session identifier used for budgeting.
 
     Prefer an explicit X-Session-Id header; otherwise, fall back to a stable
@@ -92,8 +168,13 @@ def get_session_id(x_session_id: str | None = Header(default=None)) -> str:
 
     if x_session_id:
         return x_session_id
+    token = x_api_key.strip() if x_api_key else None
+    if not token:
+        token = _extract_bearer_token(authorization or "")
+    if token:
+        return f"api_key:{token}"
     if settings.api_key:
-        return f"api_key:{settings.api_key}"
+        return "api_key:default"
     return "local-session"
 
 
@@ -218,6 +299,7 @@ def get_run_status(run_id: str, _: None = Depends(require_api_key)) -> RunStatus
 def run_experiment(
     req: RunExperimentRequest,
     _: None = Depends(require_api_key),
+    __: None = Depends(require_scopes("experiments:run")),
     session_id: str = Depends(get_session_id),
 ) -> RunSubmissionResponse:
     """Deprecated convenience wrapper for submitting runs to the queue."""

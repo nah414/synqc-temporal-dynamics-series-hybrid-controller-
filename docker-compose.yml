@@ -1,0 +1,46 @@
+services:
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      # Auth
+      SYNQC_API_KEY: "${SYNQC_API_KEY:-dev-local-key}"
+
+      # Budget backend (shared)
+      SYNQC_REDIS_URL: "redis://redis:6379/0"
+      SYNQC_BUDGET_FAIL_OPEN_ON_REDIS_ERROR: "false"
+
+      # Job system
+      SYNQC_JOB_QUEUE_DB_PATH: "/data/jobs.sqlite3"
+      SYNQC_JOB_TIMEOUT_SECONDS: "90"
+      SYNQC_JOB_QUEUE_MAX_PENDING: "1000"
+
+      # Safety defaults
+      SYNQC_ALLOW_REMOTE_HARDWARE: "false"
+      SYNQC_ALLOW_PROVIDER_SIMULATION: "false"
+    depends_on:
+      - redis
+    volumes:
+      - api_data:/data
+    ports:
+      - "8001:8001"
+
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    depends_on:
+      - api
+    ports:
+      - "8080:80"
+
+volumes:
+  redis_data:
+  api_data:

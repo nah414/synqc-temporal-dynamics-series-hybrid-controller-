@@ -175,6 +175,25 @@
       font-weight: 700;
       font-size: 12px;
     }
+    .latency-overlay {
+      position: fixed;
+      right: 16px;
+      bottom: 16px;
+      z-index: 8;
+      padding: 8px 12px;
+      border-radius: 10px;
+      background: rgba(8, 10, 30, 0.9);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-soft);
+      font-size: 12px;
+      letter-spacing: 0.02em;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+    }
+    .latency-overlay strong {
+      color: var(--text-main);
+      font-weight: 600;
+    }
     @media (max-width: 1100px) {
       .console-grid {
         grid-template-columns: minmax(260px, 320px) minmax(0, 1.6fr);
@@ -1072,10 +1091,10 @@
     <span class="hint" title="Passing API keys via URL or storing in localStorage can leak secrets via browser history and shared links. Use only for dev/short-lived tokens.">?</span>
   </div>
   <div class="panel-sub">
-    The UI will read ?api_key=... only when you append <code>&allow_url_api_key=1</code> for dev use. Avoid embedding long-lived secrets in URLs or localStorage for production.
+    The UI reads <code>?api_key=...</code> once to seed <code>localStorage</code> (keys: <code>synqc_api_key</code> / <code>synqc_bearer_token</code>), then removes it from the URL. Avoid embedding long-lived secrets in URLs or localStorage for production.
   </div>
   <div class="panel-sub warning" id="urlKeyWarning" style="display:none;">
-    URL API keys are disabled (recommended). Add <code>&allow_url_api_key=1</code> only for short-lived dev tokens.
+    API key detected in URL. It will be stored locally and the URL cleaned.
   </div>
 </div>
 
@@ -1468,6 +1487,10 @@
       </div>
     </main>
 
+    <div class="latency-overlay" id="latencyOverlay" aria-live="polite">
+      API latency: <strong id="latencyValue">--</strong>
+    </div>
+
     <footer>
       SynQc TDS is the front-end console for SynQc Temporal Dynamics Series — bridging Drive–Probe–Drive
       theory, mid-circuit measurement, and real hardware backends into a single, guided control experience.
@@ -1663,41 +1686,76 @@
       }
     })();
 
-    function defaultApiBase() {
-      const params = new URLSearchParams(window.location.search);
-      const override = params.get('api');
-      if (override) return override.replace(/\/$/, "");
+    let URL_API_KEYS_ENABLED = false;
 
-      // If opened as a local file, assume the backend is running on localhost:8001.
-      if (window.location.protocol === 'file:') return 'http://localhost:8001';
-
-      // If served via a dev server (e.g., Live Server / http.server), assume backend on the same host:8001.
-      return `${window.location.protocol}//${window.location.hostname}:8001`;
+    // Better default API base when served via nginx reverse proxy:
+    // - If ?api= is set, respect it.
+    // - Else if http(s), use same-origin /api.
+    // - Else (file://), fallback to localhost backend.
+    function getApiBase() {
+      const u = new URL(window.location.href);
+      const override = u.searchParams.get("api");
+      if (override) return override.replace(/\/+$/, "");
+      if (location.protocol === "http:" || location.protocol === "https:") {
+        return location.origin + "/api";
+      }
+      return "http://localhost:8001";
     }
 
-    const API_BASE = defaultApiBase();
-    let URL_API_KEYS_ENABLED = false;
-    const devApiKeyEnabled = (window.location.search || '').includes('api_key=') || (window.location.search || '').includes('key=');
-    // WARNING: Loading API keys from URL params can leak secrets via history/logs.
-    // Only intended for dev/short-lived tokens. The tooltip in Setup references this.
-    const URL_API_KEYS_ALLOWED = (() => {
-      const flag = new URLSearchParams(window.location.search).get('allow_url_api_key');
-      return flag === '1' || flag === 'true';
-    })();
-    const API_KEY = (() => {
-      if (!devApiKeyEnabled || !URL_API_KEYS_ALLOWED) {
-        try { return localStorage.getItem('synqc_api_key'); } catch (_) { return null; }
-      }
+    const API_BASE = getApiBase();
+
+    // Supports BOTH:
+    //  - X-Api-Key: <value>   (query param: ?api_key=... or ?key=...)
+    //  - Authorization: Bearer <value> (query param: ?token=... or ?bearer=...)
+    //
+    // For dev convenience, query params are persisted to localStorage.
+    // For production, avoid shipping secrets in URLs.
+    const AUTH = (() => {
       const params = new URLSearchParams(window.location.search);
-      const fromParam = params.get('api_key') || params.get('key');
-      if (fromParam) {
-        try { localStorage.setItem('synqc_api_key', fromParam); } catch (_) { /* ignore */ }
-        URL_API_KEYS_ENABLED = true;
-        return fromParam;
+
+      const fromBearer = params.get('token') || params.get('bearer');
+      const fromApiKey = params.get('api_key') || params.get('key');
+
+      if (fromBearer) {
+        try { localStorage.setItem('synqc_bearer_token', fromBearer); } catch (_) {}
       }
-      try { return localStorage.getItem('synqc_api_key'); } catch (_) { return null; }
+      if (fromApiKey) {
+        try { localStorage.setItem('synqc_api_key', fromApiKey); } catch (_) {}
+      }
+
+      if (fromBearer || fromApiKey) {
+        params.delete('token');
+        params.delete('bearer');
+        params.delete('api_key');
+        params.delete('key');
+        const newQuery = params.toString();
+        const newUrl = `${window.location.pathname}${newQuery ? `?${newQuery}` : ''}${window.location.hash}`;
+        if (window.history && window.history.replaceState) {
+          window.history.replaceState({}, document.title, newUrl);
+        }
+        URL_API_KEYS_ENABLED = true;
+      }
+
+      let bearer = null;
+      let apiKey = null;
+      try { bearer = localStorage.getItem('synqc_bearer_token'); } catch (_) {}
+      try { apiKey = localStorage.getItem('synqc_api_key'); } catch (_) {}
+
+      return { bearer, apiKey };
     })();
-    if (!URL_API_KEYS_ALLOWED && urlKeyWarning) {
+    window.SYNQC_API_KEY = AUTH.apiKey || null;
+
+    function authHeaders() {
+      // Prefer Bearer if present
+      if (AUTH.bearer) {
+        const v = AUTH.bearer.startsWith('Bearer ') ? AUTH.bearer : `Bearer ${AUTH.bearer}`;
+        return { 'Authorization': v };
+      }
+      if (window.SYNQC_API_KEY) return { 'X-Api-Key': window.SYNQC_API_KEY };
+      return {};
+    }
+
+    if (URL_API_KEYS_ENABLED && urlKeyWarning) {
       urlKeyWarning.style.display = 'block';
     }
 
@@ -1719,6 +1777,20 @@
     let qubitDemoCount = 1;
     let latestQubitCount = null;
     let sessionQubitTotal = 0;
+    const latencySamples = [];
+
+    function updateLatencyOverlay(durationMs) {
+      const valueEl = document.getElementById('latencyValue');
+      if (!valueEl) return;
+      if (typeof durationMs !== 'number' || Number.isNaN(durationMs)) {
+        valueEl.textContent = '--';
+        return;
+      }
+      latencySamples.push(durationMs);
+      if (latencySamples.length > 20) latencySamples.shift();
+      const avg = latencySamples.reduce((sum, v) => sum + v, 0) / latencySamples.length;
+      valueEl.textContent = `${Math.round(durationMs)}ms (avg ${Math.round(avg)}ms)`;
+    }
 
     function setRunStatus(text) {
       runStatus.textContent = text;
@@ -1735,39 +1807,45 @@
       runAlert.style.display = 'flex';
     }
 
+    async function synqcApiFetch(path, opts = {}) {
+      const options = {...opts};
+      options.headers = {...(options.headers || {})};
+
+      if (window.SYNQC_API_KEY) options.headers["X-Api-Key"] = window.SYNQC_API_KEY;
+      if (AUTH.bearer) options.headers["Authorization"] = `Bearer ${AUTH.bearer}`;
+
+      options.credentials = "include";
+      const start = performance.now();
+      let res = await fetch(`${API_BASE}${path}`, options);
+      updateLatencyOverlay(performance.now() - start);
+
+      return res;
+    }
+
     async function apiGet(path) {
-      const res = await fetch(API_BASE + path, {
+      const res = await synqcApiFetch(path, {
         method: 'GET',
-        headers: Object.assign(
-          { 'X-Session-Id': SESSION_ID },
-          API_KEY ? { 'X-Api-Key': API_KEY } : {}
-        ),
+        headers: authHeaders(),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return await res.json();
     }
 
     async function apiPost(path, payload) {
-      const res = await fetch(API_BASE + path, {
+      const res = await synqcApiFetch(path, {
         method: 'POST',
         headers: Object.assign(
           { 'Content-Type': 'application/json' },
-          { 'X-Session-Id': SESSION_ID },
-          API_KEY ? { 'X-Api-Key': API_KEY } : {}
+          authHeaders()
         ),
         body: JSON.stringify(payload),
       });
       if (!res.ok) {
-        let detail = '';
-        let error_detail = null;
-        try {
-          const data = await res.json();
-          error_detail = data?.detail;
-          detail = data?.detail?.message || data?.detail || '';
-        } catch (_) { /* ignore */ }
-        const err = new Error(`HTTP ${res.status}${detail ? ` — ${detail}` : ''}`);
-        err.response = { error_detail }; // lightweight attachment for UI alerts
-        throw err;
+        // Try to bubble up useful backend details (nice for your UI alerts)
+        let detail = null;
+        try { detail = await res.json(); } catch (_) {}
+        const msg = detail?.detail?.message || detail?.detail || `HTTP ${res.status}`;
+        throw new Error(msg);
       }
       return await res.json();
     }

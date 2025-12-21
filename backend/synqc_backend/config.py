@@ -31,6 +31,23 @@ class SynQcSettings(BaseSettings):
     require_api_key: bool = True
     api_key: str | None = None
 
+    # Auth
+    auth_required: bool = Field(
+        default=False,
+        description="When true, require auth even if SYNQC_API_KEY is unset (recommended for production).",
+    )
+    auth_db_path: str = Field(default="data/auth.sqlite3", description="SQLite path for auth/users/tokens")
+    cookie_secure: bool = Field(default=False, description="Set cookies Secure=True (requires HTTPS)")
+    cookie_samesite: str = Field(default="lax", description="Cookie SameSite: lax|strict|none")
+
+    session_cookie_name: str = Field(default="synqc_session")
+    csrf_cookie_name: str = Field(default="synqc_csrf")
+    session_ttl_seconds: int = Field(default=60 * 60 * 24 * 7, ge=300)
+
+    password_pbkdf2_iterations: int = Field(default=260_000, ge=100_000)
+
+    refresh_cookie_name: str = Field(default="synqc_refresh")
+
     # CORS allowlist (comma-separated env var or list in code)
     cors_allow_origins: list[str] = Field(
         default_factory=lambda: ["http://127.0.0.1:8080", "http://localhost:8080"]
@@ -41,8 +58,29 @@ class SynQcSettings(BaseSettings):
         default=None, description="Redis connection URL for budgets and queues"
     )
     session_budget_ttl_seconds: int = Field(default=3600, ge=60)
+    budget_fail_open_on_redis_error: bool = Field(
+        default=False,
+        description=(
+            "If Redis budget backend fails, fallback to in-memory (dev). "
+            "In prod, keep false to fail closed."
+        ),
+    )
     worker_pool_size: int = Field(default=4, ge=1)
     job_graceful_shutdown_seconds: int = Field(default=5, ge=0)
+    job_timeout_seconds: int = Field(
+        default=90,
+        ge=0,
+        description="Soft timeout for jobs; 0 disables",
+    )
+    job_queue_max_pending: int = Field(
+        default=1000,
+        ge=1,
+        description="Backpressure limit for queued+running jobs",
+    )
+    job_queue_db_path: str = Field(
+        default="data/jobs.sqlite3",
+        description="SQLite path for persistent job spool",
+    )
 
     # Metrics / observability
     enable_metrics: bool = Field(
