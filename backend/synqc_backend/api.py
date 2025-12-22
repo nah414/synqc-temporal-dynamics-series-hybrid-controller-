@@ -1,14 +1,14 @@
 from __future__ import annotations
 
+import atexit
+import secrets
 from pathlib import Path
 from threading import Lock
 from time import monotonic
 from typing import List, Optional
-import secrets
 
 from fastapi import Depends, FastAPI, Header, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-import atexit
 
 from .budget import BudgetTracker
 from .config import settings
@@ -191,6 +191,7 @@ app.add_middleware(
 
 _HEALTH_CACHE: dict[str, object] = {"expires_at": 0.0, "payload": None}
 _HEALTH_CACHE_LOCK = Lock()
+
 
 @app.get("/health", tags=["meta"])
 def health() -> dict:
