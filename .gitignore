@@ -28,6 +28,7 @@ Thumbs.db
 # Logs / local data
 *.log
 synqc_experiments.json
+backend/data/
 
 # Node (if added later)
 node_modules/

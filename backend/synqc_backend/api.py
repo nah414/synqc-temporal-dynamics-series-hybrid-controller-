@@ -18,6 +18,7 @@ from .auth import auth_router
 from .auth.store import AuthStore
 from .auth.deps import require_scopes
 from .hardware_backends import list_backends
+from .physics_router import router as physics_router
 from .jobs import JobQueue
 from .metrics import MetricsExporter
 from .models import (
@@ -82,6 +83,7 @@ app = FastAPI(
 auth_store = AuthStore(settings.auth_db_path)
 app.state.auth_store = auth_store
 app.include_router(auth_router, prefix="/auth", tags=["auth"])
+app.include_router(physics_router)
 
 def _cors_origins() -> list[str]:
     # Ensures we never accidentally allow "*" when credentials are enabled.
@@ -345,10 +347,12 @@ def _enqueue_run(req: RunExperimentRequest, session_id: str) -> RunSubmissionRes
             },
         )
     backend = backends[req.hardware_target]
+    has_live_client = getattr(backend, "_live_client", None) is not None
     if (
         backend.kind != "sim"
         and not settings.allow_provider_simulation
         and settings.allow_remote_hardware
+        and not has_live_client
     ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

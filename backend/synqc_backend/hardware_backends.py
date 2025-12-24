@@ -7,7 +7,73 @@ from abc import ABC, abstractmethod
 from typing import Dict
 
 from .config import settings
-from .models import ExperimentPreset, KpiBundle, ExperimentStatus
+from .kpi_estimators import distribution_fidelity, fidelity_dist_from_counts
+from .models import ExperimentPreset, ExperimentStatus, KpiBundle
+from .provider_clients import BaseProviderClient, load_provider_clients
+from .stats import Counts
+
+
+def _normalize_distribution(dist: Dict[str, float]) -> Dict[str, float]:
+    total = sum(max(0.0, float(v)) for v in dist.values())
+    if total <= 0:
+        raise ValueError("distribution must have positive mass")
+    return {k: max(0.0, float(v)) / total for k, v in dist.items()}
+
+
+def _expected_distribution(preset: ExperimentPreset, rng: random.Random) -> Dict[str, float]:
+    """Return a lightweight reference distribution for the requested preset."""
+
+    if preset is ExperimentPreset.LATENCY:
+        base = {"00": 0.55, "01": 0.22, "10": 0.14, "11": 0.09}
+    elif preset is ExperimentPreset.BACKEND_COMPARE:
+        base = {"00": 0.42, "01": 0.22, "10": 0.2, "11": 0.16}
+    else:
+        # HEALTH, DPD_DEMO (or unknown)
+        base = {"00": 0.64, "11": 0.28, "01": 0.05, "10": 0.03}
+
+    # Add gentle jitter so runs don't look copy-pasted while staying normalized.
+    jittered = {k: v + rng.uniform(-0.01, 0.01) for k, v in base.items()}
+    return _normalize_distribution(jittered)
+
+
+def _mix_toward_uniform(
+    expected_q: Dict[str, float], target_fidelity: float | None, rng: random.Random
+) -> Dict[str, float]:
+    """Blend a reference distribution toward uniform to match a target fidelity."""
+
+    outcomes = list(expected_q.keys())
+    uniform = 1.0 / len(outcomes)
+
+    # Candidate noise weights toward uniform. Evaluate fidelity to pick the closest match.
+    candidates = [i / 200 for i in range(1, 80)]  # 0.005 .. 0.395
+    best = _normalize_distribution(expected_q)
+    best_score = float("inf")
+
+    for noise in candidates:
+        mixed = {o: (1 - noise) * expected_q[o] + noise * uniform for o in outcomes}
+        mixed = _normalize_distribution(mixed)
+        f = distribution_fidelity(expected_q, mixed)
+        if target_fidelity is None:
+            score = rng.random() * 0.01  # deterministic-ish but keeps loop cheap
+        else:
+            score = abs(f - target_fidelity)
+        if score < best_score:
+            best = mixed
+            best_score = score
+
+    # Small random tilt to avoid identical runs and ensure normalization.
+    tilted = {o: max(0.0, v + rng.uniform(-0.005, 0.005)) for o, v in best.items()}
+    return _normalize_distribution(tilted)
+
+
+def _sample_counts(dist: Dict[str, float], shots: int, rng: random.Random) -> Counts:
+    outcomes = list(dist.keys())
+    weights = [dist[o] for o in outcomes]
+    draws = rng.choices(outcomes, weights=weights, k=shots)
+    counts: Counts = {o: 0 for o in outcomes}
+    for d in draws:
+        counts[d] += 1
+    return counts
 
 
 class BaseBackend(ABC):
@@ -59,22 +125,33 @@ class LocalSimulatorBackend(BaseBackend):
         base_seed = int(time.time()) ^ hash(preset.value)
         rng = random.Random(base_seed)
 
+        expected_q = _expected_distribution(preset, rng)
+        target_fidelity: float | None
+
         if preset is ExperimentPreset.HEALTH:
-            fidelity = 0.94 + rng.random() * 0.04  # 0.94–0.98
+            target_fidelity = 0.94 + rng.random() * 0.04  # 0.94–0.98
             latency = 15.0 + rng.random() * 6.0
             backaction = 0.15 + rng.random() * 0.1
         elif preset is ExperimentPreset.LATENCY:
-            fidelity = None
+            target_fidelity = None
             latency = 10.0 + rng.random() * 15.0
             backaction = 0.1 + rng.random() * 0.1
         elif preset is ExperimentPreset.BACKEND_COMPARE:
-            fidelity = 0.93 + rng.random() * 0.05
+            target_fidelity = 0.93 + rng.random() * 0.05
             latency = 18.0 + rng.random() * 10.0
             backaction = 0.2 + rng.random() * 0.1
         else:  # DPD_DEMO or unknown
-            fidelity = 0.9 + rng.random() * 0.08
+            target_fidelity = 0.90 + rng.random() * 0.06
             latency = 12.0 + rng.random() * 8.0
             backaction = 0.1 + rng.random() * 0.1
+
+        actual_q = _mix_toward_uniform(expected_q, target_fidelity, rng)
+        raw_counts = _sample_counts(actual_q, shots_used, rng)
+        measured_shots = sum(raw_counts.values())
+
+        fidelity = None
+        if target_fidelity is not None:
+            fidelity = fidelity_dist_from_counts(raw_counts, expected_q)
 
         status: ExperimentStatus
         if fidelity is not None and fidelity < 0.9:
@@ -88,7 +165,9 @@ class LocalSimulatorBackend(BaseBackend):
             fidelity=fidelity,
             latency_us=latency,
             backaction=backaction,
-            shots_used=shots_used,
+            raw_counts=raw_counts,
+            expected_distribution=expected_q,
+            shots_used=measured_shots,
             shot_budget=shot_budget,
             status=status,
         )
@@ -119,6 +198,7 @@ class ProviderBackend(BaseBackend):
         latency_span_us: float,
         backaction_base: float,
         backaction_span: float,
+        live_client: BaseProviderClient | None = None,
     ) -> None:
         super().__init__(id=id, name=name, kind=kind)
         self.vendor = vendor
@@ -128,6 +208,7 @@ class ProviderBackend(BaseBackend):
         self._latency_span_us = latency_span_us
         self._backaction_base = backaction_base
         self._backaction_span = backaction_span
+        self._live_client = live_client
 
     def _rng(self, preset: ExperimentPreset) -> random.Random:
         # Use a stable-ish seed: time changes provide variety, zlib keeps deterministic mixing.
@@ -143,10 +224,19 @@ class ProviderBackend(BaseBackend):
         backaction = self._backaction_base + rng.random() * self._backaction_span
 
         fidelity = None
+        expected_q = _expected_distribution(preset, rng)
+        target_fidelity: float | None = None
         if preset is not ExperimentPreset.LATENCY:
             fidelity_span = self._fidelity_ceiling - self._fidelity_floor
-            fidelity = self._fidelity_floor + rng.random() * fidelity_span
-            fidelity = max(0.0, min(1.0, fidelity))
+            target_fidelity = self._fidelity_floor + rng.random() * fidelity_span
+            target_fidelity = max(0.0, min(1.0, target_fidelity))
+
+        actual_q = _mix_toward_uniform(expected_q, target_fidelity, rng)
+        raw_counts = _sample_counts(actual_q, shots_used, rng)
+        measured_shots = sum(raw_counts.values())
+
+        if target_fidelity is not None:
+            fidelity = fidelity_dist_from_counts(raw_counts, expected_q)
 
         status: ExperimentStatus
         if fidelity is not None and fidelity < 0.90:
@@ -162,7 +252,64 @@ class ProviderBackend(BaseBackend):
             fidelity=fidelity,
             latency_us=latency_us,
             backaction=backaction,
-            shots_used=shots_used,
+            raw_counts=raw_counts,
+            expected_distribution=expected_q,
+            shots_used=measured_shots,
+            shot_budget=shot_budget,
+            status=status,
+        )
+
+    def _run_live(self, preset: ExperimentPreset, shot_budget: int) -> KpiBundle:
+        if not self._live_client:
+            raise RuntimeError("No live provider client configured")
+
+        result = self._live_client.run(preset, shot_budget)
+
+        raw_counts = result.raw_counts
+        measured_shots = result.shots_used or sum(raw_counts.values())
+
+        expected_q: Dict[str, float]
+        if result.expected_distribution:
+            expected_q = _normalize_distribution(result.expected_distribution)
+        else:
+            # Fall back to the reference shape so fidelity can still be estimated
+            rng = self._rng(preset)
+            expected_q = _expected_distribution(preset, rng)
+
+        fidelity = result.fidelity
+        if fidelity is None and expected_q:
+            try:
+                fidelity = fidelity_dist_from_counts(raw_counts, expected_q)
+            except ValueError:
+                fidelity = None
+
+        latency_us = result.latency_us
+        if latency_us is None:
+            rng = self._rng(preset)
+            latency_us = self._latency_base_us + rng.random() * self._latency_span_us
+
+        backaction = result.backaction
+        if backaction is None:
+            rng = self._rng(preset)
+            backaction = self._backaction_base + rng.random() * self._backaction_span
+
+        status: ExperimentStatus
+        if fidelity is not None and fidelity < 0.90:
+            status = ExperimentStatus.FAIL
+        elif fidelity is not None and fidelity < 0.94:
+            status = ExperimentStatus.WARN
+        elif backaction is not None and backaction > 0.35:
+            status = ExperimentStatus.WARN
+        else:
+            status = ExperimentStatus.OK
+
+        return KpiBundle(
+            fidelity=fidelity,
+            latency_us=latency_us,
+            backaction=backaction,
+            raw_counts=raw_counts,
+            expected_distribution=expected_q,
+            shots_used=measured_shots,
             shot_budget=shot_budget,
             status=status,
         )
@@ -176,16 +323,26 @@ class ProviderBackend(BaseBackend):
         without credentials while still exercising the full flow.
         """
 
+        # If a live client is configured, prefer it to ensure raw_counts/expectations
+        # reflect the provider SDK response instead of synthetic draws.
+        if self._live_client:
+            try:
+                return self._run_live(preset, shot_budget)
+            except Exception:
+                if not settings.allow_provider_simulation:
+                    raise
+
         if not settings.allow_provider_simulation:
             raise RuntimeError(
                 "Provider simulation is disabled for this deployment. "
                 "To exercise provider stubs in simulation mode, set SYNQC_ALLOW_PROVIDER_SIMULATION=true "
-                "or use the local simulator backend."
+                "or provide a live provider client via SYNQC_PROVIDER_PAYLOAD_<BACKEND_ID>."
             )
 
-        # Placeholder for live integration. In production deployments, swap this
-        # with provider SDK dispatch and KPI extraction.
         return self._simulate(preset, shot_budget)
+
+_PROVIDER_CLIENTS = load_provider_clients()
+
 
 # Registry of backends
 _BACKENDS: Dict[str, BaseBackend] = {
@@ -204,6 +361,7 @@ _BACKENDS: Dict[str, BaseBackend] = {
         latency_span_us=110.0,
         backaction_base=0.16,
         backaction_span=0.14,
+        live_client=_PROVIDER_CLIENTS.get("aws_braket"),
     ),
     "ibm_quantum": ProviderBackend(
         id="ibm_quantum",
@@ -216,6 +374,7 @@ _BACKENDS: Dict[str, BaseBackend] = {
         latency_span_us=65.0,
         backaction_base=0.15,
         backaction_span=0.16,
+        live_client=_PROVIDER_CLIENTS.get("ibm_quantum"),
     ),
     "azure_quantum": ProviderBackend(
         id="azure_quantum",
@@ -228,6 +387,7 @@ _BACKENDS: Dict[str, BaseBackend] = {
         latency_span_us=190.0,
         backaction_base=0.12,
         backaction_span=0.15,
+        live_client=_PROVIDER_CLIENTS.get("azure_quantum"),
     ),
     "ionq_cloud": ProviderBackend(
         id="ionq_cloud",
@@ -240,6 +400,7 @@ _BACKENDS: Dict[str, BaseBackend] = {
         latency_span_us=260.0,
         backaction_base=0.10,
         backaction_span=0.14,
+        live_client=_PROVIDER_CLIENTS.get("ionq_cloud"),
     ),
     "rigetti_forest": ProviderBackend(
         id="rigetti_forest",
@@ -252,6 +413,7 @@ _BACKENDS: Dict[str, BaseBackend] = {
         latency_span_us=75.0,
         backaction_base=0.16,
         backaction_span=0.18,
+        live_client=_PROVIDER_CLIENTS.get("rigetti_forest"),
     ),
 }
 

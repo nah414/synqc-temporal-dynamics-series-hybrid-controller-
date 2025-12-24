@@ -56,6 +56,8 @@ class ExperimentStore:
                     created_at=r.created_at,
                     qubits_used=r.qubits_used,
                     control_profile=r.control_profile,
+                    physics_contract=r.physics_contract,
+                    kpi_details=r.kpi_details,
                     error_detail=r.error_detail,
                 )
                 for r in runs_sorted[:limit]

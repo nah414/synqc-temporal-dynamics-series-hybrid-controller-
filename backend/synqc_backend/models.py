@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 from .control_profiles import ControlProfile
+from .physics_contract import PhysicsContract
 
 
 class ExperimentPreset(str, Enum):
@@ -38,6 +39,17 @@ class KpiBundle(BaseModel):
     backaction: Optional[float] = Field(
         default=None,
         description="Scalar measure of probe-induced disturbance (0–1)."
+    )
+    raw_counts: Optional[Dict[str, int]] = Field(
+        default=None,
+        description="Shot-outcome counts backing sampling-based KPIs.",
+    )
+    expected_distribution: Optional[Dict[str, float]] = Field(
+        default=None,
+        description=(
+            "Reference outcome probabilities used to evaluate sampling-based KPIs"
+            " (e.g., fidelity to an expected distribution)."
+        ),
     )
     shots_used: int = Field(
         default=0,
@@ -99,6 +111,17 @@ class RunExperimentRequest(BaseModel):
     )
 
 
+class KpiDetail(BaseModel):
+    """Rich KPI entry anchored to a formal definition id."""
+
+    name: str
+    value: Optional[Any] = None
+    definition_id: str
+    ci95: Optional[List[float]] = Field(
+        default=None,
+        description="Optional [lo, hi] confidence interval when sampling-based KPIs are estimated.",
+    )
+
 class RunExperimentResponse(BaseModel):
     """Response returned after an experiment run has been accepted and executed."""
 
@@ -113,6 +136,14 @@ class RunExperimentResponse(BaseModel):
     )
     notes: Optional[str] = None
     control_profile: Optional[ControlProfile] = None
+    physics_contract: Optional[PhysicsContract] = Field(
+        default=None,
+        description="Declared physics/measurement contract under which KPIs were computed.",
+    )
+    kpi_details: Optional[List[KpiDetail]] = Field(
+        default=None,
+        description="Per-KPI definitions and optional uncertainty bounds.",
+    )
     error_detail: Optional[dict] = None
     workflow_trace: List[WorkflowStep] = Field(
         default_factory=list,
@@ -160,6 +191,8 @@ class ExperimentSummary(BaseModel):
         description="Estimated number of qubits entangled/active during the run.",
     )
     control_profile: Optional[ControlProfile] = None
+    physics_contract: Optional[PhysicsContract] = None
+    kpi_details: Optional[List[KpiDetail]] = None
     error_detail: Optional[dict] = None
 
 

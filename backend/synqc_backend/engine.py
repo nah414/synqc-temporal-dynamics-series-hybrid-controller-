@@ -14,11 +14,14 @@ from .models import (
     ExperimentPreset,
     ExperimentStatus,
     KpiBundle,
+    KpiDetail,
     RunExperimentRequest,
     RunExperimentResponse,
     WorkflowStep,
 )
 from .qubit_usage import SessionQubitTracker
+from .kpi_estimators import fidelity_dist_ci95_from_counts
+from .physics_contract import infer_contract, kpi_definition_id_for_name
 from .storage import ExperimentStore
 
 
@@ -238,6 +241,44 @@ class SynQcEngine:
 
         return base
 
+    def _build_kpi_details(self, kpis: KpiBundle) -> list[KpiDetail]:
+        """Attach definition ids and uncertainty to KPIs when data is available."""
+
+        kpi_details: list[KpiDetail] = []
+        kpi_map = {
+            "fidelity": kpis.fidelity,
+            "latency_us": kpis.latency_us,
+            "backaction": kpis.backaction,
+        }
+
+        for name, value in kpi_map.items():
+            if value is None:
+                continue
+            definition_id = kpi_definition_id_for_name(name)
+            detail_kwargs: dict[str, object] = {
+                "name": name,
+                "value": value,
+                "definition_id": definition_id,
+            }
+
+            if (
+                definition_id == "fidelity_dist_v1"
+                and kpis.raw_counts
+                and kpis.expected_distribution
+            ):
+                try:
+                    lo, hi = fidelity_dist_ci95_from_counts(
+                        kpis.raw_counts, kpis.expected_distribution, n_boot=200
+                    )
+                    detail_kwargs["ci95"] = [lo, hi]
+                except ValueError:
+                    # If the inputs are degenerate, skip CI instead of failing the run.
+                    pass
+
+            kpi_details.append(KpiDetail(**detail_kwargs))
+
+        return kpi_details
+
     def run_experiment(self, req: RunExperimentRequest, session_id: str) -> RunExperimentResponse:
         """Run a high-level SynQc experiment according to the request."""
         effective_shot_budget, warn_for_target = self._apply_shot_guardrails(req, session_id)
@@ -255,6 +296,11 @@ class SynQcEngine:
         if kpis.shot_budget == 0:
             kpis.shot_budget = effective_shot_budget
 
+        if kpis.raw_counts:
+            measured = sum(int(v) for v in kpis.raw_counts.values())
+            if measured > 0:
+                kpis.shots_used = measured
+
         # If we had to clamp or warn on target, bump status to WARN (if not already FAIL)
         if warn_for_target and kpis.status is not ExperimentStatus.FAIL:
             kpis.status = ExperimentStatus.WARN
@@ -262,6 +308,16 @@ class SynQcEngine:
         # If latency is missing, approximate with wall-clock delta
         if kpis.latency_us is None:
             kpis.latency_us = (end - start) * 1e6
+
+        physics_contract = infer_contract(
+            target=req.hardware_target,
+            shots_requested=effective_shot_budget,
+            shots_executed=kpis.shots_used,
+            n_qubits=qubits_used,
+            backend_id=None,
+        )
+
+        kpi_details = self._build_kpi_details(kpis)
 
         run_id = str(uuid.uuid4())
         run = RunExperimentResponse(
@@ -273,6 +329,8 @@ class SynQcEngine:
             qubits_used=qubits_used,
             notes=req.notes,
             control_profile=active_controls,
+            physics_contract=physics_contract,
+            kpi_details=kpi_details or None,
             workflow_trace=self._build_workflow_trace(req, kpis, active_controls),
         )
 
