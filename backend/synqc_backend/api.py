@@ -36,6 +36,7 @@ from .models import (
 )
 from .qubit_usage import SessionQubitTracker
 from .storage import ExperimentStore
+from .redis_bus import close_redis, redis_ping
 
 
 # Instantiate storage, budget tracker, engine, and queue
@@ -84,6 +85,11 @@ auth_store = AuthStore(settings.auth_db_path)
 app.state.auth_store = auth_store
 app.include_router(auth_router, prefix="/auth", tags=["auth"])
 app.include_router(physics_router)
+
+
+@app.on_event("shutdown")
+async def _shutdown() -> None:
+    await close_redis()
 
 def _cors_origins() -> list[str]:
     # Ensures we never accidentally allow "*" when credentials are enabled.
@@ -196,7 +202,7 @@ _HEALTH_CACHE_LOCK = Lock()
 
 
 @app.get("/health", tags=["meta"])
-def health() -> dict:
+async def health() -> dict:
     """Simple health check endpoint."""
     ttl_seconds = settings.health_cache_ttl_seconds
     if ttl_seconds > 0:
@@ -229,6 +235,7 @@ def health() -> dict:
         "control_profile": control_store.get(),
         "qubit_usage": qubit_tracker.health(),
     }
+    payload["redis"] = await redis_ping()
     if ttl_seconds > 0:
         with _HEALTH_CACHE_LOCK:
             _HEALTH_CACHE["payload"] = payload

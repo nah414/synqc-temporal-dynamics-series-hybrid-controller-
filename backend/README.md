@@ -27,12 +27,17 @@ This package provides:
 ## Requirements
 
 - Python **3.12+**
-- Recommended: create a virtual environment
+- Recommended: create a virtual environment. In restricted networks, pre-install
+  `wheel` so editable installs do not fail when the build backend tries to build
+  metadata. Once `wheel` is available, use the helper script to bypass build
+  isolation so `pip` reuses the system `setuptools`/`wheel` instead of trying to
+  download them through a blocked proxy.
 
 ```bash
 python3.12 -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
-pip install -e .
+pip install wheel
+./scripts/dev_install.sh  # uses PIP_NO_BUILD_ISOLATION=1 under the hood
 ```
 
 Or install just the runtime deps:
@@ -41,10 +46,14 @@ Or install just the runtime deps:
 pip install fastapi uvicorn[standard] pydantic numpy redis prometheus-client
 ```
 
-For the optional load-test helper, install the `dev` extra to pull in `httpx`:
+For the optional load-test helper, install the `dev` extra to pull in `httpx`
+and `wheel` (the latter ensures `bdist_wheel` is available during editable
+installs even when your network blocks package indexes):
 
 ```bash
 pip install -e .[dev]
+# If your proxy blocks build isolation downloads, prefer the helper script:
+# ./scripts/dev_install.sh
 ```
 
 ---
@@ -68,6 +77,41 @@ Then you can access:
 - Load test helper: `python backend/scripts/load_test.py` (prefers cached `httpx` wheel in `backend/synqc_backend/vendor/httpx_wheels/`)
   - In CI, set `SYNQC_HTTPX_VENDOR=backend/synqc_backend/vendor/httpx_wheels/` (or replace the cached wheel with the official package) so the load test uses the real client rather than the stub.
   - Keep the vendored wheel current (e.g., update to the latest httpx patch release when bumping dependencies) to stay aligned with FastAPI/Starlette testclient expectations.
+
+### Run with Docker Compose (API + Redis + Web)
+
+For containerized deployments that need the API, Redis, and frontend to talk to each other in real time, use the provided `docker-compose.yml` from the repo root. Copy the sample env first so Compose picks up your overrides:
+
+```bash
+cp .env.example .env
+docker compose up --build
+```
+
+The stack now includes a `redis` service configured for append-only persistence and mounted storage. The API is automatically pointed at this instance via `SYNQC_REDIS_URL=redis://redis:6379/0` (override with your own endpoint if needed). Data for Redis and the job queue are persisted in Docker volumes (`synqc_redis_data`, `synqc_data`) so containers can be restarted without losing state.
+
+Once containers are healthy, verify the API can reach Redis by checking the health endpoint (returns `budget_tracker.redis_connected: true` when Redis is up):
+
+```bash
+docker compose ps
+curl -sf http://127.0.0.1:8001/health
+# Optional: run an active Redis probe from inside the backend container
+docker compose run --rm api python -m synqc_backend.redis_healthcheck
+```
+
+### Redis connectivity probe without Docker
+
+If Docker is unavailable, you can still validate Redis access from your host environment as long as you have a reachable Redis endpoint:
+
+```bash
+# Point these at your running Redis instance (defaults are the Compose settings)
+export REDIS_URL=${REDIS_URL:-redis://localhost:6379/0}
+export REDIS_EVENTS_CHANNEL=${REDIS_EVENTS_CHANNEL:-synqc:events}
+
+# Run the same probe used in the container image
+python -m synqc_backend.redis_healthcheck
+```
+
+The script exits with a non-zero status if ping or publish fails, making it easy to wire into CI checks or local troubleshooting even when Docker isn't present.
 
 ---
 
@@ -189,12 +233,12 @@ Key series to scrape:
 
 Scrape and alert setup:
 
-1. Add a scrape job pointed at the metrics exporter port. An example configuration (including alerting rules) lives at `backend/ops/prometheus-synqc-example.yml`; drop this into your Prometheus ConfigMap or `prometheus.yml` and tweak the target to match your deployment.
+1. Add a scrape job pointed at the metrics exporter port. A starter scrape job lives at `backend/ops/prometheus-synqc-example.yml`; drop this into your Prometheus ConfigMap or `prometheus.yml` and tweak the target to match your deployment.
 2. If you use Prometheus Operator, convert the scrape job into a `ServiceMonitor` and the alerts into `PrometheusRule` resources. The expressions in the example file match the recommended guardrails in this README.
 3. Validate the configuration with `promtool check config prometheus-synqc-example.yml` (or your merged config) before rolling it out, then reload your Prometheus server so the scrape job is active.
 4. Confirm the job is live by hitting your Prometheus UI and querying `synqc_queue_jobs_queued` and `synqc_redis_connected` for the `synqc-backend` job.
 
-Example alerting rules (tune for your SLOs) are already embedded in `backend/ops/prometheus-synqc-example.yml` and cover Redis disconnects, queue backlogs, and budget-key churn spikes.
+Alerting rules (tune for your SLOs) are now factored into `backend/ops/synqc-alerts.yml` and cover Redis disconnects, queue backlogs, and budget-key churn spikes. Mount or merge this rules file wherever your Prometheus server expects rule definitions.
 
 ### CI/staging Prometheus scrape + alert routing
 
@@ -213,7 +257,7 @@ docker run -d --name synqc-alertmanager \
 
 docker run -d --name synqc-prometheus \
   -v $(pwd)/ops/prometheus-ci-scrape.yml:/etc/prometheus/prometheus.yml \
-  -v $(pwd)/ops/prometheus-synqc-example.yml:/etc/prometheus/synqc-alerts.yml \
+  -v $(pwd)/ops/synqc-alerts.yml:/etc/prometheus/synqc-alerts.yml \
   --add-host host.docker.internal:host-gateway \
   -p 9090:9090 prom/prometheus:latest
 ```

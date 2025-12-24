@@ -8,8 +8,15 @@ services:
     volumes:
       - synqc_data:/data
     environment:
+      REDIS_ENABLED: "true"
+      REDIS_URL: "redis://redis:6379/0"
+      REDIS_EVENTS_CHANNEL: "synqc:events"
       UVICORN_WORKERS: ${UVICORN_WORKERS:-1}
+      SYNQC_REDIS_URL: ${SYNQC_REDIS_URL:-redis://redis:6379/0}
       SYNQC_HEALTH_CACHE_TTL_SECONDS: ${SYNQC_HEALTH_CACHE_TTL_SECONDS:-3}
+    depends_on:
+      redis:
+        condition: service_healthy
     healthcheck:
       test:
         [
@@ -22,6 +29,20 @@ services:
       timeout: 3s
       retries: 5
       start_period: 10s
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "127.0.0.1:6379:6379"   # optional: lets your HOST run redis-cli; containers don't need this
+    volumes:
+      - synqc_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
     restart: unless-stopped
 
   web:
@@ -37,3 +58,4 @@ services:
 
 volumes:
   synqc_data:
+  synqc_redis_data:

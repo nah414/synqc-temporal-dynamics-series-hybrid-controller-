@@ -103,10 +103,12 @@ If your backend isn’t on `localhost:8001`, open:
 
 ## Run it in Docker Desktop
 
-This repo ships with a `docker-compose.yml` that builds the FastAPI backend and serves the
-static frontend with Nginx. From the repo root:
+This repo ships with a `docker-compose.yml` that builds the FastAPI backend, starts Redis, and
+serves the static frontend with Nginx. From the repo root (copy the sample env first so Compose
+gets your overrides):
 
 ```bash
+cp .env.example .env
 docker compose up --build
 ```
 
@@ -115,6 +117,20 @@ adjust it as needed:
 
 ```bash
 cp .env.example .env
+```
+
+The sample `.env` now sets `SYNQC_REDIS_URL=redis://redis:6379/0` so the backend automatically
+targets the bundled Redis container. Redis runs with append-only persistence, a health check
+(`redis-cli ping`), and a host-only port mapping (`127.0.0.1:6379:6379`) for optional CLI access
+from the host.
+
+After the stack is up, confirm Redis connectivity and the API health check via:
+
+```bash
+docker compose ps
+curl -sf http://127.0.0.1:8001/health
+# Optionally, run an active Redis probe from inside the backend container
+docker compose run --rm api python -m synqc_backend.redis_healthcheck
 ```
 
 Then open:
