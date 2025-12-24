@@ -33,6 +33,8 @@ def distribution_fidelity(p: Mapping[str, float], q: Mapping[str, float]) -> flo
     """
     # Use the union of supports so missing outcomes are treated as 0.
     keys = set(p.keys()) | set(q.keys())
+    if not keys:
+        raise ValueError("distributions must have at least one outcome")
     s = 0.0
     for k in keys:
         pk = float(p.get(k, 0.0))

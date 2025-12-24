@@ -132,11 +132,11 @@ def kpi_definition_id_for_name(kpi_name: str) -> str:
     if "fidelity" in n:
         return "fidelity_dist_v1"
     if "latency" in n:
-        return "latency_ms_v1"
+        return "latency_us_v1"
     if "backaction" in n:
         return "backaction_proxy_v1"
     # fallback: treat unknown KPIs as system-level with no formal claim yet
-    return "latency_ms_v1"
+    return "unknown_kpi_v1"
 
 def kpi_definitions_payload() -> Dict[str, Any]:
     return {

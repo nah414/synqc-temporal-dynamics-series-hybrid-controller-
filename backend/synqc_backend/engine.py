@@ -298,7 +298,9 @@ class SynQcEngine:
 
         if kpis.raw_counts:
             measured = sum(int(v) for v in kpis.raw_counts.values())
-            if measured > 0:
+            if measured > 0 and (
+                kpis.shots_used in (None, 0) or measured > kpis.shots_used
+            ):
                 kpis.shots_used = measured
 
         # If we had to clamp or warn on target, bump status to WARN (if not already FAIL)

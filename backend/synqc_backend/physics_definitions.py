@@ -41,11 +41,11 @@ KPI_DEFINITIONS: Dict[str, Dict[str, Any]] = {
             "Hardware-valid because it depends only on classical outcome distributions.",
         ],
     },
-    "latency_ms_v1": {
-        "name": "latency_ms",
+    "latency_us_v1": {
+        "name": "latency_us",
         "kind": "system",
-        "unit": "ms",
-        "summary": "Wall-clock latency measured by the backend for a single experiment execution.",
+        "unit": "us",
+        "summary": "Wall-clock latency measured by the backend for a single experiment execution (microseconds).",
         "math": r"\Delta t = t_\mathrm{done} - t_\mathrm{start}",
         "requires": {"data": ["timestamps or duration measurements"], "estimator": "direct measurement"},
         "uncertainty": {"type": "none", "notes": "Latency variability is typically dominated by system/hardware scheduling, not shot noise."},
@@ -66,6 +66,19 @@ KPI_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "notes": [
             "Mark as SIM_ONLY unless you implement a hardware protocol (e.g., weak measurement, tomography, or certified disturbance bounds)."
         ],
+    },
+    "unknown_kpi_v1": {
+        "name": "unknown_metric",
+        "kind": "system",
+        "unit": "arbitrary",
+        "summary": "Placeholder for unmapped KPI fields so consumers can handle them explicitly.",
+        "math": "N/A",
+        "requires": {
+            "data": ["metric-specific"],
+            "estimator": "metric-specific",
+        },
+        "uncertainty": {"type": "none", "notes": "Attach appropriate CI if sampling-based once definition is known."},
+        "simulator_only": False,
     },
 }
 

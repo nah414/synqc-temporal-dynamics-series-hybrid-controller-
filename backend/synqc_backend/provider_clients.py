@@ -1,12 +1,20 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from dataclasses import dataclass
 from typing import Dict, Protocol
 
 from .models import ExperimentPreset
 from .stats import Counts
+
+
+logger = logging.getLogger(__name__)
+
+
+class ProviderClientError(RuntimeError):
+    """Raised when provider client payloads cannot be loaded or validated."""
 
 
 @dataclass
@@ -36,10 +44,13 @@ class FilePayloadProviderClient:
 
     def _load(self) -> dict:
         # If the payload points to a file, load it; otherwise treat as inline JSON
-        if os.path.exists(self._payload):
-            with open(self._payload, "r", encoding="utf-8") as f:
-                return json.load(f)
-        return json.loads(self._payload)
+        try:
+            if os.path.exists(self._payload):
+                with open(self._payload, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            return json.loads(self._payload)
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ProviderClientError(f"Failed to load provider payload from {self._payload!r}") from exc
 
     def run(self, preset: ExperimentPreset, shot_budget: int) -> ProviderLiveResult:
         data = self._load()
@@ -51,7 +62,10 @@ class FilePayloadProviderClient:
         shots_used = data.get("shots_used")
 
         # Normalize keys/values to expected types
-        normalized_counts: Counts = {str(k): int(v) for k, v in raw_counts.items()}
+        try:
+            normalized_counts: Counts = {str(k): int(v) for k, v in raw_counts.items()}
+        except Exception as exc:
+            raise ProviderClientError("Invalid raw_counts in provider payload") from exc
 
         return ProviderLiveResult(
             raw_counts=normalized_counts,
@@ -82,6 +96,12 @@ def load_provider_clients() -> dict[str, BaseProviderClient]:
         try:
             clients[backend_id] = FilePayloadProviderClient(value)
         except Exception:
-            # Keep failing entries isolated to avoid disrupting unrelated backends.
+            # Keep failing entries isolated to avoid disrupting unrelated backends,
+            # but surface the failure for observability.
+            logger.exception(
+                "Failed to initialize provider client for backend '%s' from env var '%s'",
+                backend_id,
+                key,
+            )
             continue
     return clients

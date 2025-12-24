@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import random
 import time
 import zlib
@@ -9,8 +10,11 @@ from typing import Dict
 from .config import settings
 from .kpi_estimators import distribution_fidelity, fidelity_dist_from_counts
 from .models import ExperimentPreset, ExperimentStatus, KpiBundle
-from .provider_clients import BaseProviderClient, load_provider_clients
+from .provider_clients import BaseProviderClient, ProviderClientError, load_provider_clients
 from .stats import Counts
+
+
+logger = logging.getLogger(__name__)
 
 
 def _normalize_distribution(dist: Dict[str, float]) -> Dict[str, float]:
@@ -263,18 +267,26 @@ class ProviderBackend(BaseBackend):
         if not self._live_client:
             raise RuntimeError("No live provider client configured")
 
-        result = self._live_client.run(preset, shot_budget)
+        try:
+            result = self._live_client.run(preset, shot_budget)
+        except ProviderClientError:
+            raise
+        except Exception as exc:
+            raise ProviderClientError(f"Live provider call failed: {exc}") from exc
 
         raw_counts = result.raw_counts
         measured_shots = result.shots_used or sum(raw_counts.values())
 
         expected_q: Dict[str, float]
-        if result.expected_distribution:
-            expected_q = _normalize_distribution(result.expected_distribution)
-        else:
-            # Fall back to the reference shape so fidelity can still be estimated
-            rng = self._rng(preset)
-            expected_q = _expected_distribution(preset, rng)
+        try:
+            if result.expected_distribution:
+                expected_q = _normalize_distribution(result.expected_distribution)
+            else:
+                # Fall back to the reference shape so fidelity can still be estimated
+                rng = self._rng(preset)
+                expected_q = _expected_distribution(preset, rng)
+        except ValueError as exc:
+            raise ProviderClientError(f"Invalid expected_distribution from provider: {exc}") from exc
 
         fidelity = result.fidelity
         if fidelity is None and expected_q:
@@ -328,7 +340,12 @@ class ProviderBackend(BaseBackend):
         if self._live_client:
             try:
                 return self._run_live(preset, shot_budget)
-            except Exception:
+            except ProviderClientError as exc:
+                logger.warning(
+                    "Live provider execution failed for %s: %s",
+                    self.id,
+                    exc,
+                )
                 if not settings.allow_provider_simulation:
                     raise
 
