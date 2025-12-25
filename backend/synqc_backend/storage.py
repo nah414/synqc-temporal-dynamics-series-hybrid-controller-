@@ -20,6 +20,8 @@ class ExperimentStore:
         self._persist_path = persist_path
         self._lock = threading.Lock()
         self._runs: Dict[str, RunExperimentResponse] = {}
+        self._persist_mtime: float | None = None
+        self._last_persist_ok: bool = True
 
         if self._persist_path and self._persist_path.exists():
             try:
@@ -27,6 +29,7 @@ class ExperimentStore:
                 for entry in data:
                     run = RunExperimentResponse.model_validate(entry)
                     self._runs[run.id] = run
+                self._persist_mtime = self._persist_path.stat().st_mtime
             except Exception:
                 # If the file is corrupt or incompatible, we ignore it.
                 pass
@@ -41,10 +44,12 @@ class ExperimentStore:
             self._persist()
 
     def get(self, run_id: str) -> Optional[RunExperimentResponse]:
+        self._refresh_from_disk()
         with self._lock:
             return self._runs.get(run_id)
 
     def list_recent(self, limit: int = 50) -> List[ExperimentSummary]:
+        self._refresh_from_disk()
         with self._lock:
             runs_sorted = sorted(self._runs.values(), key=lambda r: r.created_at, reverse=True)
             return [
@@ -63,10 +68,19 @@ class ExperimentStore:
                     physics_contract=r.physics_contract,
                     kpi_details=r.kpi_details,
                     kpi_observations=r.kpi_observations,
+                    error_code=r.error_code,
+                    error_message=r.error_message,
                     error_detail=r.error_detail,
+                    action_hint=r.action_hint,
                 )
                 for r in runs_sorted[:limit]
             ]
+
+    @property
+    def is_empty(self) -> bool:
+        self._refresh_from_disk()
+        with self._lock:
+            return len(self._runs) == 0
 
     def _persist(self) -> None:
         if not self._persist_path:
@@ -74,6 +88,41 @@ class ExperimentStore:
         try:
             data = [r.model_dump(mode="json") for r in self._runs.values()]
             self._persist_path.write_text(json.dumps(data, indent=2))
+            self._persist_mtime = self._persist_path.stat().st_mtime
+            self._last_persist_ok = True
         except Exception:
             # Persistence failures should not kill the engine.
-            pass
+            self._last_persist_ok = False
+
+    def _refresh_from_disk(self) -> None:
+        if not self._persist_path:
+            return
+        try:
+            mtime = self._persist_path.stat().st_mtime
+        except FileNotFoundError:
+            return
+        if self._persist_mtime and mtime <= self._persist_mtime:
+            return
+
+        try:
+            data = json.loads(self._persist_path.read_text())
+            with self._lock:
+                self._runs.clear()
+                for entry in data:
+                    run = RunExperimentResponse.model_validate(entry)
+                    self._runs[run.id] = run
+                self._persist_mtime = mtime
+                self._last_persist_ok = True
+        except Exception:
+            # If reload fails, keep existing in-memory cache.
+            self._last_persist_ok = False
+            return
+
+    def health_summary(self) -> Dict[str, object]:
+        return {
+            "backend": "file" if self._persist_path else "memory",
+            "persist_path": str(self._persist_path) if self._persist_path else None,
+            "persist_ok": self._last_persist_ok,
+            "entries": len(self._runs),
+            "last_modified": self._persist_mtime,
+        }

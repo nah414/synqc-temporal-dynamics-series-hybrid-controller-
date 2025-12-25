@@ -1,0 +1,44 @@
+name: "Bug report"
+description: "Report a reproducible problem so we can fix it quickly."
+labels: ["bug"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened and what did you expect?
+      placeholder: I tried ___ and expected ___, but instead ___.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Step-by-step instructions or a minimal code/circuit sample.
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version/build
+      description: Git commit, Docker tag, or build SHA.
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, CPU, Python version, and whether Redis was enabled.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs and metrics
+      description: Relevant API/worker logs, error codes, or Prometheus excerpts.
+      render: shell
+  - type: textarea
+    id: extra
+    attributes:
+      label: Additional context
+      description: Screenshots, hardware targets, or anything else useful.

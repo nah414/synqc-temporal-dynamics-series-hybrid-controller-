@@ -11,6 +11,7 @@ from .physics_contract import PhysicsContract
 class ExperimentPreset(str, Enum):
     """High-level experiment presets supported by the SynQc engine."""
 
+    HELLO_QUANTUM_SIM = "hello_quantum_sim"
     HEALTH = "health"
     LATENCY = "latency"
     BACKEND_COMPARE = "backend_compare"
@@ -23,6 +24,47 @@ class ExperimentStatus(str, Enum):
     OK = "ok"
     WARN = "warn"
     FAIL = "fail"
+
+
+class ErrorCode(str, Enum):
+    """Structured error code taxonomy for operator visibility."""
+
+    AUTH_REQUIRED = "AUTH_REQUIRED"
+    REMOTE_DISABLED = "REMOTE_DISABLED"
+    PROVIDER_SIM_DISABLED = "PROVIDER_SIM_DISABLED"
+    PROVIDER_CREDENTIALS = "PROVIDER_CREDENTIALS"
+    PROVIDER_CAPACITY = "PROVIDER_CAPACITY"
+    PROVIDER_QUEUE_BACKPRESSURE = "PROVIDER_QUEUE_BACKPRESSURE"
+    INVALID_TARGET = "INVALID_TARGET"
+    INVALID_REQUEST = "INVALID_REQUEST"
+    BUDGET_EXHAUSTED = "BUDGET_EXHAUSTED"
+    BUDGET_GUARDRAIL = "BUDGET_GUARDRAIL"
+    TIMEOUT = "TIMEOUT"
+    CANCELLED = "CANCELLED"
+    INTERNAL_ERROR = "INTERNAL_ERROR"
+    PROVIDER_ERROR = "PROVIDER_ERROR"
+
+
+class ErrorReport(BaseModel):
+    """Uniform error payload surfaced to the UI, logs, and metrics."""
+
+    error_code: ErrorCode
+    error_message: str
+    error_detail: Optional[dict] = None
+    action_hint: Optional[str] = Field(
+        default=None,
+        description="Operator hint for recovering from the failure.",
+    )
+
+    def as_legacy_detail(self) -> dict:
+        """Preserve compatibility with existing clients expecting error_detail.code."""
+
+        detail = dict(self.error_detail or {})
+        detail.setdefault("code", self.error_code)
+        detail.setdefault("message", self.error_message)
+        if self.action_hint:
+            detail.setdefault("action_hint", self.action_hint)
+        return detail
 
 
 class KpiBundle(BaseModel):
@@ -88,6 +130,29 @@ class HardwareTarget(BaseModel):
     name: str
     kind: str  # e.g. "sim", "superconducting", "trapped_ion", "fpga_lab"
     description: str
+    capabilities: Optional["ProviderCapabilities"] = Field(
+        default=None,
+        description="Hardware/provider capability descriptor (queueing, limits, gates).",
+    )
+
+
+class ProviderCapabilities(BaseModel):
+    """Provider capability descriptor for API discovery."""
+
+    max_shots: Optional[int] = Field(
+        default=None, description="Maximum allowed shots for a single execution."
+    )
+    queue_behavior: str = Field(
+        default="inline",
+        description="How work is scheduled: inline, queued, batched, priority, etc.",
+    )
+    supported_gates: List[str] = Field(
+        default_factory=list,
+        description="Gate set available for circuit-style submissions.",
+    )
+    notes: Optional[str] = Field(
+        default=None, description="Optional free-form capability notes or caveats."
+    )
 
 
 class RunExperimentRequest(BaseModel):
@@ -223,7 +288,25 @@ class RunExperimentResponse(BaseModel):
             "UI-friendly KPI descriptors with names, kinds, units, references, and uncertainty bounds."
         ),
     )
-    error_detail: Optional[dict] = None
+    artifacts: Optional[dict] = Field(
+        default=None,
+        description="Raw provider artifacts captured alongside KPIs (counts, logs, traces).",
+    )
+    error_code: Optional[ErrorCode] = Field(
+        default=None,
+        description="Structured error code taxonomy for failed runs.",
+    )
+    error_message: Optional[str] = Field(
+        default=None,
+        description="User-visible error message clarifying the failure.",
+    )
+    error_detail: Optional[dict] = Field(
+        default=None, description="Provider- or guardrail-specific error metadata."
+    )
+    action_hint: Optional[str] = Field(
+        default=None,
+        description="Operator hint that explains how to remediate the failure.",
+    )
     workflow_trace: List[WorkflowStep] = Field(
         default_factory=list,
         description="Ordered set of orchestration nodes that activated during the run.",
@@ -248,7 +331,10 @@ class RunSubmissionResponse(BaseModel):
     started_at: Optional[float] = None
     finished_at: Optional[float] = None
     error: Optional[str] = None
+    error_code: Optional[ErrorCode] = None
+    error_message: Optional[str] = None
     error_detail: Optional[dict] = None
+    action_hint: Optional[str] = None
 
 
 class RunStatusResponse(RunSubmissionResponse):
@@ -277,7 +363,10 @@ class ExperimentSummary(BaseModel):
     physics_contract: Optional[PhysicsContract] = None
     kpi_details: Optional[List[KpiDetail]] = None
     kpi_observations: Optional[List[KpiDetail]] = None
+    error_code: Optional[ErrorCode] = None
+    error_message: Optional[str] = None
     error_detail: Optional[dict] = None
+    action_hint: Optional[str] = None
 
 
 class HardwareTargetsResponse(BaseModel):

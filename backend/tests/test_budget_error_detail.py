@@ -20,5 +20,6 @@ def test_budget_exceeded_sets_structured_error():
 
     assert record.status == "failed"
     assert record.error_detail is not None
-    assert record.error_detail.get("code") == "session_budget_exhausted"
+    assert record.error_code.value == "BUDGET_EXHAUSTED"
+    assert record.error_detail.get("code") == "BUDGET_EXHAUSTED"
     assert record.error_detail.get("remaining") == 0

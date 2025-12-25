@@ -27,8 +27,8 @@ def test_provider_simulation_disabled_returns_403(monkeypatch):
     assert exc.value.status_code == 403
     detail = exc.value.detail
     assert isinstance(detail, dict)
-    assert detail.get("code") == "provider_simulation_disabled"
-    assert "Provider simulation is disabled" in detail.get("message", "")
+    assert detail.get("code") == "PROVIDER_SIM_DISABLED"
+    assert "Provider simulation is disabled" in detail.get("error_message", "")
 
 
 def test_remote_hardware_disabled(monkeypatch):
@@ -44,7 +44,7 @@ def test_remote_hardware_disabled(monkeypatch):
         _enqueue_run(request, session_id="test-session")
 
     assert exc.value.status_code == 403
-    assert exc.value.detail.get("code") == "remote_hardware_disabled"
+    assert exc.value.detail.get("code") == "REMOTE_DISABLED"
 
 
 def test_unknown_hardware_target(monkeypatch):
@@ -60,4 +60,4 @@ def test_unknown_hardware_target(monkeypatch):
         _enqueue_run(request, session_id="test-session")
 
     assert exc.value.status_code == 400
-    assert exc.value.detail.get("code") == "unknown_hardware_target"
+    assert exc.value.detail.get("code") == "INVALID_TARGET"

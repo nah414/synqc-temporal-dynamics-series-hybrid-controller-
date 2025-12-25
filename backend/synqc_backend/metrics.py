@@ -6,6 +6,8 @@ from typing import Optional
 
 from prometheus_client import Counter, Gauge, start_http_server
 
+from .metrics_recorder import provider_metrics
+
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +73,35 @@ class MetricsExporter:
             "synqc_queue_max_workers",
             "Configured maximum worker threads available to execute jobs",
         )
+        self._queue_failure_codes = Gauge(
+            "synqc_queue_failure_codes_total",
+            "Total failures recorded by error_code",
+            labelnames=["error_code"],
+        )
+        self._queue_failure_targets = Gauge(
+            "synqc_queue_failures_by_target_total",
+            "Total failures recorded by hardware target",
+            labelnames=["hardware_target"],
+        )
+        self._known_failure_labels: set[str] = set()
+        self._known_failure_targets: set[str] = set()
+        self._provider_seen_targets: set[str] = set()
+
+        self._provider_success = Gauge(
+            "synqc_provider_health_success_total",
+            "Snapshot of provider successes recorded by target",
+            labelnames=["hardware_target"],
+        )
+        self._provider_failure = Gauge(
+            "synqc_provider_health_failures_total",
+            "Snapshot of provider failures recorded by target",
+            labelnames=["hardware_target"],
+        )
+        self._provider_simulated = Gauge(
+            "synqc_provider_health_simulated_total",
+            "Snapshot of provider simulation fallbacks recorded by target",
+            labelnames=["hardware_target"],
+        )
 
         self._collection_errors = Counter(
             "synqc_metrics_collection_errors_total",
@@ -122,6 +153,7 @@ class MetricsExporter:
     def _collect_once(self) -> None:
         self._collect_budget_metrics()
         self._collect_queue_metrics()
+        self._collect_provider_metrics()
 
     def _collect_budget_metrics(self) -> None:
         summary = self._budget_tracker.health_summary()
@@ -152,3 +184,49 @@ class MetricsExporter:
         oldest_age = stats.get("oldest_queued_age_s")
         self._queue_oldest_age.set(oldest_age or 0)
         self._queue_max_workers.set(stats.get("max_workers", 0))
+
+        failure_codes = stats.get("failure_codes", {}) or {}
+        current_labels = set()
+        for code, count in failure_codes.items():
+            label = str(code)
+            current_labels.add(label)
+            self._queue_failure_codes.labels(error_code=label).set(count)
+
+        # Zero out gauges for codes we have seen before but are now absent
+        for code in self._known_failure_labels - current_labels:
+            self._queue_failure_codes.labels(error_code=code).set(0)
+        self._known_failure_labels = self._known_failure_labels | current_labels
+
+        failure_targets = stats.get("failures_by_target", {}) or {}
+        current_targets = set()
+        for target, count in failure_targets.items():
+            current_targets.add(target)
+            self._queue_failure_targets.labels(hardware_target=target).set(count)
+
+        for target in self._known_failure_targets - current_targets:
+            self._queue_failure_targets.labels(hardware_target=target).set(0)
+        self._known_failure_targets = self._known_failure_targets | current_targets
+
+    def _collect_provider_metrics(self) -> None:
+        summary = provider_metrics.health_summary()
+        targets = summary.get("targets", {}) or {}
+
+        current_targets = set()
+        for target, stats in targets.items():
+            current_targets.add(target)
+            self._provider_success.labels(hardware_target=target).set(
+                int(stats.get("success", 0) or 0)
+            )
+            self._provider_failure.labels(hardware_target=target).set(
+                int(stats.get("failure", 0) or 0)
+            )
+            self._provider_simulated.labels(hardware_target=target).set(
+                int(stats.get("simulated", 0) or 0)
+            )
+
+        for target in self._provider_seen_targets - current_targets:
+            self._provider_success.labels(hardware_target=target).set(0)
+            self._provider_failure.labels(hardware_target=target).set(0)
+            self._provider_simulated.labels(hardware_target=target).set(0)
+
+        self._provider_seen_targets = self._provider_seen_targets | current_targets

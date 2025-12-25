@@ -1,5 +1,45 @@
 # SynQc TDS Console — Sleek Repo v0.4
 
+![Preset run walkthrough showing Run preset, KPI tiles, and a filling history table](docs/demo-walkthrough.svg)
+
+### Why this exists
+
+Quantum experimentation is fragmented; SynQc standardizes runs, KPIs, and budgets so teams can compare simulator and hardware targets without rewriting tooling.
+
+### 20-second “how it works”
+
+UI → API → Queue → Provider → Store → UI
+
+![How SynQc flows from UI to API to queue to providers and back to the store](docs/how-it-works.svg)
+
+### Roadmap
+
+- Simulator-first baseline for reproducible demos
+- IBM/Qiskit integration milestone for live and Aer runs
+- Braket milestone behind the provider registry
+- Hosted demo milestone so prospects can click before cloning
+
+## Demo
+
+- docker compose up --build
+- open http://localhost:8080
+- click “Run preset”
+- see KPIs + history + experiments table + details view
+- GitHub
+- +1
+
+### Two-process layout (synqc-api + synqc-worker)
+
+- The FastAPI service **synqc-api** handles ingress, auth, and queue status.
+- The dedicated worker **synqc-worker** pulls run requests from Redis and executes them so the UI stays responsive.
+- Scale workers independently (`docker compose up --build` now starts both services alongside Redis and the web UI).
+
+### VS Code / dev container quickstart
+
+- Open the repo in VS Code and choose **Reopen in Container** to use the bundled `.devcontainer` (Python 3.12 + Docker-in-Docker) with `backend[dev,qiskit,braket,ionq]` ready.
+- The dev container bakes in pre-built wheels from `backend/requirements.lock` (core + Qiskit + Braket + IonQ) so installs stay fast and deterministic even behind strict proxies.
+- Use the provided tasks (Terminal → Run Task…) to run the API, worker, tests, or bring up the full Docker demo without extra setup.
+
 This repository combines:
 
 - The **approved SynQc TDS frontend console look** (single-file UI).

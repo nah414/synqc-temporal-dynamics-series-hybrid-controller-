@@ -1,0 +1,31 @@
+name: "Provider integration request"
+description: "Suggest a new quantum provider/backend integration."
+labels: ["provider"]
+body:
+  - type: input
+    id: provider
+    attributes:
+      label: Provider/backends requested
+      placeholder: AWS Braket, IonQ Cloud, Quantinuum, etc.
+    validations:
+      required: true
+  - type: textarea
+    id: capabilities
+    attributes:
+      label: Required capabilities
+      description: Gate set, max shots, queues/latency expectations, artifacts needed.
+  - type: textarea
+    id: credentials
+    attributes:
+      label: Credentials and environment
+      description: How should contributors obtain credentials? Any regions or quotas to consider?
+  - type: textarea
+    id: workloads
+    attributes:
+      label: Representative workloads
+      description: Circuits, QASM snippets, or metrics to validate the integration.
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Links to SDK docs, existing adapters, or partnership details.

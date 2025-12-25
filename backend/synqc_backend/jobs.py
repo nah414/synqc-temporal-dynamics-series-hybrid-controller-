@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+import logging
 import time
 import uuid
 from concurrent.futures import Future, ThreadPoolExecutor, wait
@@ -9,7 +10,9 @@ from typing import Callable, Dict, Optional
 
 from .engine import BudgetExceeded
 from .job_store import SqliteJobStore
+from .provider_clients import ProviderClientError
 from .models import (
+    ErrorCode,
     ExperimentStatus,
     KpiBundle,
     RunExperimentRequest,
@@ -17,6 +20,10 @@ from .models import (
     WorkflowStep,
 )
 from .storage import ExperimentStore
+from .metrics_recorder import run_metrics
+
+
+logger = logging.getLogger(__name__)
 
 
 class JobStatus(str):
@@ -37,6 +44,9 @@ class JobRecord:
         self.result = None
         self.error: str | None = None
         self.error_detail: dict | None = None
+        self.error_code: ErrorCode | None = None
+        self.error_message: str | None = None
+        self.action_hint: str | None = None
 
 
 def _model_dump(obj) -> dict:
@@ -79,6 +89,7 @@ class JobQueue:
         self._futures: Dict[str, Future] = {}
         self._cancel_events: Dict[str, Event] = {}
         self._timers: Dict[str, Timer] = {}
+        self._failure_counts: Dict[str, int] = {}
 
         self._lock = Lock()
         self._store = store
@@ -161,9 +172,18 @@ class JobQueue:
                 return False
 
             record.error = reason
-            record.error_detail = {"code": "cancelled", "message": reason}
+            record.error_code = ErrorCode.CANCELLED
+            record.error_message = reason
+            record.action_hint = "Retry the run or clear the queue if the workflow is stuck."
+            record.error_detail = {
+                "code": record.error_code.value if record.error_code else None,
+                "message": record.error_message,
+                "action_hint": record.action_hint,
+            }
             record.finished_at = now
             record.status = JobStatus.FAILED
+            code = record.error_code.value if record.error_code else "UNKNOWN"
+            self._failure_counts[code] = self._failure_counts.get(code, 0) + 1
 
             ev = self._cancel_events.get(job_id)
             if ev:
@@ -220,13 +240,19 @@ class JobQueue:
                 return
 
             record.error = "Timed out"
+            record.error_code = ErrorCode.TIMEOUT
+            record.error_message = "Job exceeded timeout"
+            record.action_hint = "Try again with a smaller shot budget or fewer queued jobs."
             record.error_detail = {
-                "code": "timeout",
-                "message": "Job exceeded timeout",
+                "code": record.error_code.value if record.error_code else None,
+                "message": record.error_message,
                 "timeout_seconds": self._job_timeout_seconds,
+                "action_hint": record.action_hint,
             }
             record.status = JobStatus.FAILED
             record.finished_at = now
+            code = record.error_code.value if record.error_code else "UNKNOWN"
+            self._failure_counts[code] = self._failure_counts.get(code, 0) + 1
 
             ev = self._cancel_events.get(job_id)
             if ev:
@@ -295,14 +321,34 @@ class JobQueue:
         except BudgetExceeded as exc:
             self._fail_record(
                 record,
-                code="session_budget_exhausted",
+                code=ErrorCode.BUDGET_EXHAUSTED,
                 message=str(exc),
                 extra={"remaining": getattr(exc, "remaining", None)},
+                action_hint="Lower the shot budget or wait for the session budget to reset.",
+            )
+        except ProviderClientError as exc:
+            self._fail_record(
+                record,
+                code=getattr(exc, "code", ErrorCode.PROVIDER_ERROR),
+                message=str(exc),
+                action_hint=getattr(exc, "action_hint", None)
+                or "Check provider credentials or select a simulator backend.",
+                extra=getattr(exc, "detail", None),
             )
         except ValueError as exc:
-            self._fail_record(record, code="invalid_request", message=str(exc))
+            self._fail_record(
+                record,
+                code=ErrorCode.INVALID_REQUEST,
+                message=str(exc),
+                action_hint="Verify the request payload and try again.",
+            )
         except Exception as exc:  # noqa: BLE001
-            self._fail_record(record, code="internal_error", message=str(exc))
+            self._fail_record(
+                record,
+                code=ErrorCode.INTERNAL_ERROR,
+                message=str(exc),
+                action_hint="Check backend logs for details and retry after remediation.",
+            )
         finally:
             # cleanup timer
             if timer:
@@ -312,20 +358,46 @@ class JobQueue:
                 if record.finished_at is None and record.status in (JobStatus.SUCCEEDED, JobStatus.FAILED):
                     record.finished_at = time.time()
 
-    def _fail_record(self, record: JobRecord, *, code: str, message: str, extra: dict | None = None) -> None:
+            self._observe_metrics(record)
+
+    def _fail_record(
+        self,
+        record: JobRecord,
+        *,
+        code: ErrorCode,
+        message: str,
+        extra: dict | None = None,
+        action_hint: str | None = None,
+    ) -> None:
         now = time.time()
-        detail = {"code": code, "message": message}
+        detail = {"code": code.value, "message": message}
         if extra:
             detail.update(extra)
+        if action_hint:
+            detail["action_hint"] = action_hint
 
         with self._lock:
             # If timeout/cancel already marked it failed, do not overwrite.
             if record.status != JobStatus.RUNNING:
                 return
             record.error = message
+            record.error_code = code
+            record.error_message = message
+            record.action_hint = action_hint
             record.error_detail = detail
             record.status = JobStatus.FAILED
             record.finished_at = now
+            self._failure_counts[code.value] = self._failure_counts.get(code.value, 0) + 1
+
+        logger.error(
+            "Job failed",
+            extra={
+                "job_id": record.id,
+                "error_code": code.value,
+                "error_message": message,
+                "extra": extra or {},
+            },
+        )
 
         if self._persist:
             self._persist.mark_finished(
@@ -337,6 +409,18 @@ class JobQueue:
             )
 
         self._persist_failure(record)
+
+    def _observe_metrics(self, record: JobRecord) -> None:
+        target = record.request.hardware_target or "unknown"
+        started = record.started_at or record.created_at or time.time()
+        finished = record.finished_at or time.time()
+        latency = max(0.0, finished - started)
+
+        if record.status == JobStatus.SUCCEEDED:
+            run_metrics.record_success(target, latency)
+        elif record.status == JobStatus.FAILED:
+            code = record.error_code.value if record.error_code else "unknown"
+            run_metrics.record_failure(target, code, latency)
 
     def _persist_failure(self, record: JobRecord) -> None:
         if not self._store:
@@ -360,7 +444,10 @@ class JobQueue:
             qubits_used=0,
             notes=req.notes,
             control_profile=req.control_overrides,
+            error_code=record.error_code,
+            error_message=record.error_message,
             error_detail=record.error_detail,
+            action_hint=record.action_hint,
             workflow_trace=[
                 WorkflowStep(
                     id="ingest",
@@ -416,4 +503,5 @@ class JobQueue:
                 "max_workers": self._executor._max_workers,
                 "max_pending": self._max_pending,
                 "job_timeout_seconds": self._job_timeout_seconds,
+                "failure_codes": dict(self._failure_counts),
             }

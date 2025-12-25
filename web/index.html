@@ -175,6 +175,33 @@
       font-weight: 700;
       font-size: 12px;
     }
+    .health-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 6px;
+    }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 8px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-subtle);
+      color: #c8d0ff;
+      font-size: 12px;
+    }
+    .status-badge[data-state="warn"] {
+      border-color: #ffb347;
+      color: #ffd9a6;
+      background: rgba(255, 179, 71, 0.12);
+    }
+    .status-badge[data-state="bad"] {
+      border-color: #ff4d6a;
+      color: #ffd1d9;
+      background: rgba(255, 77, 106, 0.12);
+    }
     .latency-overlay {
       position: fixed;
       right: 16px;
@@ -1063,10 +1090,12 @@
                 <option value="ionq_cloud">IonQ Cloud</option>
                 <option value="rigetti_forest">Rigetti Forest</option>
               </select>
+              <div class="panel-sub" id="hardwareCapabilityHint">Loading capabilities…</div>
             </div>
             <div class="field-row">
               <div class="field-label">Experiment preset</div>
               <select class="field-select" id="presetSelect">
+                <option value="hello_quantum_sim">Hello Quantum (Sim)</option>
                 <option value="health">Qubit Health Diagnostics (T1/T2/RB)</option>
                 <option value="latency">Latency Characterization</option>
                 <option value="backend_compare">Backend A/B Comparison</option>
@@ -1098,15 +1127,16 @@
   </div>
 </div>
 
-  <div class="field-row">
-    <div class="field-label">Actions</div>
-    <button class="primary-btn" id="runPresetBtn" type="button">Run preset</button>
-    <div class="panel-sub" id="runStatus" aria-live="polite">Backend: not connected yet.</div>
-    <div class="run-alert" id="runAlert" role="alert" style="display:none;">
-      <span class="icon" aria-hidden="true">!</span>
-      <span class="alert-text"></span>
-    </div>
-    <div class="panel-credit">Developed by eVision Enterprises</div>
+    <div class="field-row">
+      <div class="field-label">Actions</div>
+      <button class="primary-btn" id="runPresetBtn" type="button">Run preset</button>
+      <div class="panel-sub" id="runStatus" aria-live="polite">Backend: not connected yet.</div>
+      <div class="health-badges" id="healthBadges" aria-live="polite"></div>
+      <div class="run-alert" id="runAlert" role="alert" style="display:none;">
+        <span class="icon" aria-hidden="true">!</span>
+        <span class="alert-text"></span>
+      </div>
+      <div class="panel-credit">Developed by eVision Enterprises</div>
 </div>
 </div>
         </div>
@@ -1233,7 +1263,9 @@
           <div class="filter-pill" data-filter="latency">Latency</div>
           <div class="filter-pill" data-filter="compare">Compare</div>
           <div class="filter-pill" data-filter="dpd">DPD demo</div>
+          <div class="filter-pill" data-filter="failing">Failing targets</div>
         </div>
+        <div class="history-footer-note" id="failingTargetsConsole"></div>
         <div class="history-table-wrap">
           <table>
             <thead>
@@ -1387,7 +1419,10 @@
               <div class="filter-pill" data-filter="latency">Latency</div>
               <div class="filter-pill" data-filter="compare">Compare</div>
               <div class="filter-pill" data-filter="dpd">DPD demo</div>
+              <div class="filter-pill" data-filter="failing">Failing targets</div>
             </div>
+
+            <div class="history-footer-note" id="failingTargetsExperiments"></div>
 
             <div class="history-table-wrap">
               <table>
@@ -1605,6 +1640,7 @@
     const scenePresetLabel = document.getElementById('scenePresetLabel');
     const sceneHardwareLabel = document.getElementById('sceneHardwareLabel');
     const hardwareSelect = document.getElementById('hardwareSelect');
+    const hardwareCapabilityHint = document.getElementById('hardwareCapabilityHint');
     const presetSelect = document.getElementById('presetSelect');
     const sceneInterpretation = document.getElementById('sceneInterpretation');
 
@@ -1613,17 +1649,19 @@
     const workflowProgressValue = document.getElementById('workflowProgressValue');
 
     const shotInput = document.getElementById('shotInput');
-    const shotLabel = document.getElementById('shotLabel');
-    const notesInput = document.getElementById('notesInput');
-    const runPresetBtn = document.getElementById('runPresetBtn');
-    const runStatus = document.getElementById('runStatus');
-    const runAlert = document.getElementById('runAlert');
-    const runAlertText = runAlert?.querySelector('.alert-text');
-    const urlKeyWarning = document.getElementById('urlKeyWarning');
+      const shotLabel = document.getElementById('shotLabel');
+      const notesInput = document.getElementById('notesInput');
+      const runPresetBtn = document.getElementById('runPresetBtn');
+      const runStatus = document.getElementById('runStatus');
+      const healthBadges = document.getElementById('healthBadges');
+      const runAlert = document.getElementById('runAlert');
+      const runAlertText = runAlert?.querySelector('.alert-text');
+      const urlKeyWarning = document.getElementById('urlKeyWarning');
 
     // Console history
     const historyBody = document.getElementById('historyBody');
     const historyFiltersConsole = document.getElementById('historyFiltersConsole');
+    const failingTargetsConsole = document.getElementById('failingTargetsConsole');
     const qubitLattice = document.getElementById('qubitLattice');
     const qubitCountDisplay = document.getElementById('qubitCountDisplay');
     const qubitSessionTotal = document.getElementById('qubitSessionTotal');
@@ -1633,6 +1671,7 @@
     const experimentsBody = document.getElementById('experimentsBody');
     const historyFiltersExperiments = document.getElementById('historyFiltersExperiments');
     const refreshExperimentsBtn = document.getElementById('refreshExperimentsBtn');
+    const failingTargetsExperiments = document.getElementById('failingTargetsExperiments');
 
     // Hardware page
     const hardwareMeta = document.getElementById('hardwareMeta');
@@ -1801,6 +1840,11 @@
       valueEl.textContent = `${Math.round(durationMs)}ms (avg ${Math.round(avg)}ms)`;
     }
 
+    function clearChildren(el) {
+      if (!el) return;
+      while (el.firstChild) el.removeChild(el.firstChild);
+    }
+
     function setRunStatus(text) {
       runStatus.textContent = text;
       if (runAlert) {
@@ -1814,6 +1858,90 @@
       if (!runAlert) return;
       if (runAlertText) runAlertText.textContent = message;
       runAlert.style.display = 'flex';
+    }
+
+    function renderHealthSummary(health) {
+      if (healthBadges) clearChildren(healthBadges);
+
+      if (!health) {
+        if (healthBadges) {
+          const chip = document.createElement('div');
+          chip.className = 'status-badge';
+          chip.dataset.state = 'bad';
+          chip.textContent = 'Backend disconnected';
+          healthBadges.appendChild(chip);
+        }
+        if (hardwareMeta) {
+          hardwareMeta.textContent = 'Backend capability not loaded yet; check /health.';
+        }
+        return;
+      }
+
+      const addBadge = (label, state = 'ok') => {
+        if (!healthBadges) return;
+        const chip = document.createElement('div');
+        chip.className = 'status-badge';
+        chip.dataset.state = state;
+        chip.textContent = label;
+        healthBadges.appendChild(chip);
+      };
+
+      const version = health.version || 'unknown';
+      addBadge(`Version ${version}`);
+
+      const targetCount = (typeof health.visible_target_count === 'number')
+        ? `${health.visible_target_count} targets visible`
+        : 'Target discovery pending';
+      addBadge(targetCount, health.visible_target_count === 0 ? 'warn' : 'ok');
+
+      const queueConn = health.queue_connectivity || {};
+      const queueStats = health.queue || {};
+      const queueBackend = queueConn.backend || queueStats.backend || 'queue';
+      const depth = (queueStats && queueStats.queued != null) ? queueStats.queued : queueConn.queue_depth;
+      const queueState = queueConn.connected === false ? 'bad' : 'ok';
+      const queueLabel = queueConn.connected === false
+        ? `${queueBackend}: offline`
+        : `${queueBackend}: depth ${depth ?? 0}`;
+      addBadge(queueLabel, queueState);
+
+      const persistence = health.persistence || {};
+      const persistOk = persistence.persist_ok !== false;
+      addBadge(persistOk ? 'Persistence ok' : 'Persistence degraded', persistOk ? 'ok' : 'warn');
+
+      const providerMetrics = health.provider_metrics || {};
+      const providerTotals = providerMetrics.totals || {};
+      const providerFailures = providerTotals.failure || 0;
+      const providerLabel = providerFailures > 0
+        ? `Providers: ${providerFailures} failures${(providerMetrics.failing_targets || []).length ? ` (${(providerMetrics.failing_targets || []).join(', ')})` : ''}`
+        : 'Providers stable';
+      addBadge(providerLabel, providerFailures > 0 ? 'warn' : 'ok');
+
+      if (health.redis !== undefined) {
+        addBadge(health.redis ? 'Redis reachable' : 'Redis unreachable', health.redis ? 'ok' : 'bad');
+      }
+
+      if (health.require_api_key) {
+        const hasKey = Boolean(AUTH.bearer || window.SYNQC_API_KEY);
+        addBadge(hasKey ? 'API key supplied' : 'API key required', hasKey ? 'ok' : 'warn');
+        if (!hasKey) {
+          showRunAlert('Backend requires an API key. Add ?api_key=... or ?token=... to seed credentials.');
+        }
+      }
+
+      if (health.server_time) {
+        addBadge(`Server ${new Date(health.server_time).toLocaleString()}`);
+      }
+
+      if (hardwareMeta) {
+        const parts = [`Backend: ${API_BASE}`, `version=${version}`];
+        if (typeof health.visible_target_count === 'number') parts.push(`targets=${health.visible_target_count}`);
+        if (typeof health.allow_remote_hardware === 'boolean') parts.push(`allow_remote_hardware=${health.allow_remote_hardware}`);
+        if (typeof health.max_shots_per_experiment === 'number') parts.push(`max_shots_per_experiment=${health.max_shots_per_experiment.toLocaleString()}`);
+        if (depth != null) parts.push(`queue_depth=${depth}`);
+        if (providerFailures > 0) parts.push(`provider_failures=${providerFailures}`);
+        if (persistence.persist_ok === false) parts.push('persistence=degraded');
+        hardwareMeta.textContent = parts.join(' · ');
+      }
     }
 
     async function synqcApiFetch(path, opts = {}) {
@@ -1836,7 +1964,15 @@
         method: 'GET',
         headers: authHeaders(),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        let detail = null;
+        try { detail = await res.json(); } catch (_) {}
+        const payload = detail?.detail || detail || {};
+        const msg = payload.error_message || payload.message || `HTTP ${res.status}`;
+        const err = new Error(msg);
+        err.response = payload;
+        throw err;
+      }
       return await res.json();
     }
 
@@ -1853,8 +1989,11 @@
         // Try to bubble up useful backend details (nice for your UI alerts)
         let detail = null;
         try { detail = await res.json(); } catch (_) {}
-        const msg = detail?.detail?.message || detail?.detail || `HTTP ${res.status}`;
-        throw new Error(msg);
+        const payload = detail?.detail || detail || {};
+        const msg = payload.error_message || payload.message || `HTTP ${res.status}`;
+        const err = new Error(msg);
+        err.response = payload;
+        throw err;
       }
       return await res.json();
     }
@@ -1865,6 +2004,7 @@
     }
 
     function presetLabel(preset) {
+      if (preset === 'hello_quantum_sim') return 'Hello Quantum (Sim)';
       if (preset === 'health') return 'Health (T1/T2/RB)';
       if (preset === 'latency') return 'Latency probe';
       if (preset === 'backend_compare') return 'Backend compare';
@@ -1905,6 +2045,24 @@
       // Fall back to current select option
       const opt = Array.from(hardwareSelect.options || []).find(o => o.value === id);
       return opt ? opt.textContent : id;
+    }
+
+    function hardwareCapabilitiesForId(id) {
+      const found = (hardwareTargetsCache || []).find(t => t.id === id);
+      return found?.capabilities;
+    }
+
+    function summarizeCapabilities(cap) {
+      if (!cap) return null;
+      const parts = [];
+      if (Number.isFinite(cap.max_shots)) parts.push(`max ${Number(cap.max_shots).toLocaleString()} shots`);
+      if (cap.queue_behavior) parts.push(`queue=${cap.queue_behavior}`);
+      if (Array.isArray(cap.supported_gates) && cap.supported_gates.length) {
+        const gates = cap.supported_gates.slice(0, 6).join(', ');
+        parts.push(`gates: ${gates}${cap.supported_gates.length > 6 ? '…' : ''}`);
+      }
+      if (cap.notes) parts.push(cap.notes);
+      return parts.join(' · ');
     }
 
     function fmtNs(ns) {
@@ -2465,6 +2623,12 @@
       const k = run.kpis || {};
       const status = k.status || 'ok';
 
+      if (run.error_code || run.error_message) {
+        const msg = run.error_message || `Run failed on ${hwName}`;
+        const hint = run.action_hint || run?.error_detail?.action_hint;
+        return hint ? `${msg} (${run.error_code || ''}). ${hint}` : `${msg} (${run.error_code || ''}).`;
+      }
+
       if (run.preset === 'health') {
         if (k.fidelity == null) {
           return `Health run completed on ${hwName}. Fidelity is not reported by this backend; inspect the record and provider logs.`;
@@ -2483,6 +2647,16 @@
         if (ba != null) extras += ` Backaction was ${ba.toFixed(2)} (lower is better).`;
 
         return `Health diagnostics completed on ${hwName}. Estimated fidelity: ${fid.toFixed(3)}. ${verdict}${extras}`;
+      }
+
+      if (run.preset === 'hello_quantum_sim') {
+        const lat = (k.latency_us == null) ? null : Number(k.latency_us);
+        const ba = (k.backaction == null) ? null : Number(k.backaction);
+        const extras = [];
+        if (lat != null) extras.push(`latency ~${lat.toFixed(1)} µs`);
+        if (ba != null) extras.push(`backaction ${ba.toFixed(2)}`);
+        const suffix = extras.length ? ` (${extras.join(' · ')})` : '';
+        return `Hello Quantum (Sim) completed on ${hwName}${suffix}. This preset is built to succeed so you can explore KPIs quickly.`;
       }
 
       if (run.preset === 'latency') {
@@ -2519,6 +2693,9 @@
           'A Qubit Health Diagnostics bundle will estimate T1 and T2-like coherence times, ' +
           'and optionally gate error, on ' + hwName + '. The console will summarize whether this backend ' +
           'is within your historical stability band.';
+      } else if (preset === 'hello_quantum_sim') {
+        sceneInterpretation.textContent =
+          'Hello Quantum (Sim) runs on the bundled simulator with forgiving guardrails so you always see KPIs, history, and details right away.';
       } else if (preset === 'latency') {
         sceneInterpretation.textContent =
           'Latency Characterization will run short DPD probes to measure control-to-readout delay on ' +
@@ -2541,14 +2718,25 @@
       const rows = tbody.querySelectorAll('tr');
       rows.forEach(row => {
         const p = row.dataset.preset || '';
+        const failing = row.dataset.failing === '1';
         const show =
           (filter === 'all') ||
           (filter === 'health' && p === 'health') ||
           (filter === 'latency' && p === 'latency') ||
           (filter === 'compare' && p === 'backend_compare') ||
-          (filter === 'dpd' && p === 'dpd_demo');
+          (filter === 'dpd' && (p === 'dpd_demo' || p === 'hello_quantum_sim')) ||
+          (filter === 'failing' && failing);
         row.style.display = show ? '' : 'none';
       });
+    }
+
+    function renderFailureNotes() {
+      const entries = Object.entries(failureByTarget || {}).sort((a, b) => (b[1] || 0) - (a[1] || 0));
+      const text = entries.length
+        ? `Most failing targets: ${entries.slice(0, 3).map(([t, c]) => `${t} (${c})`).join(', ')}`
+        : 'No provider failures recorded yet.';
+      if (failingTargetsConsole) failingTargetsConsole.textContent = text;
+      if (failingTargetsExperiments) failingTargetsExperiments.textContent = text;
     }
 
     function buildRunRowStructure(includeId) {
@@ -2596,6 +2784,7 @@
       const cells = tr._cells;
       tr.dataset.preset = run.preset;
       tr.dataset.id = run.id;
+      tr.dataset.failing = ((run.error_code || '') !== '' || (run.kpis?.status === 'fail')) ? '1' : '0';
 
       cells.tdTime.textContent = fmtTimeFromEpochSeconds(run.created_at);
 
@@ -2609,8 +2798,11 @@
       cells.tdFid.textContent = (run.kpis?.fidelity == null) ? '–' : Number(run.kpis.fidelity).toFixed(3);
       cells.tdLat.textContent = (run.kpis?.latency_us == null) ? '–' : `${Number(run.kpis.latency_us).toFixed(1)} µs`;
       cells.tdCtrl.textContent = summarizeControlProfile(run.control_profile);
-      cells.tdErr.textContent = run?.error_detail?.code || '—';
-      cells.tdErr.title = run?.error_detail?.code || '';
+      const errCode = run?.error_code || run?.error_detail?.code || '';
+      const errMsg = run?.error_message || run?.error_detail?.message || '';
+      const errHint = run?.action_hint || run?.error_detail?.action_hint || '';
+      cells.tdErr.textContent = errCode || '—';
+      cells.tdErr.title = [errMsg, errHint].filter(Boolean).join(' · ');
       cells.pill.className = `status-pill ${statusClass(run.kpis?.status)}`;
       cells.pill.textContent = statusLabel(run.kpis?.status);
 
@@ -2655,6 +2847,7 @@
 
     let consoleFilter = 'all';
     let experimentsFilter = 'all';
+    let failureByTarget = {};
 
     function wireFilterPills(container, { onChange }) {
       if (!container) return;
@@ -2690,6 +2883,7 @@
       try {
         const h = await apiGet('/health');
         healthCache = h;
+        failureByTarget = (h?.queue?.failures_by_target) || {};
 
         if (h && typeof h.max_shots_per_experiment === 'number') {
           MAX_SHOTS_PER_EXPERIMENT = h.max_shots_per_experiment;
@@ -2710,7 +2904,8 @@
           if (controlStatus) controlStatus.textContent = 'Live control profile loaded from /health.';
         }
 
-        setRunStatus(`Backend: connected (${API_BASE}) · env=${h.env ?? 'unknown'}`);
+        setRunStatus(`Backend: connected (${API_BASE}) · env=${h.env ?? 'unknown'} · version=${h.version ?? 'n/a'} · targets=${h.visible_target_count ?? 'n/a'}`);
+        renderHealthSummary(h);
 
         // Targets
         try {
@@ -2731,6 +2926,7 @@
             hardwareSelect.value = current;
           }
           hardwareSelect.dispatchEvent(new Event('change'));
+          updateHardwareCapabilityHint();
 
           // Update hardware page
           renderHardwareList();
@@ -2761,8 +2957,11 @@
           }
         } catch (_) { /* ignore */ }
 
+        renderFailureNotes();
+
       } catch (err) {
         setRunStatus(`Backend: not reachable (${API_BASE}). Start it and refresh.`);
+        renderHealthSummary(null);
       }
       await refreshQubitPanel();
     }
@@ -2793,17 +2992,6 @@
     function renderHardwareList() {
       if (!hardwareList) return;
       while (hardwareList.firstChild) hardwareList.removeChild(hardwareList.firstChild);
-
-      const allowRemote = healthCache?.allow_remote_hardware;
-      const maxShots = healthCache?.max_shots_per_experiment;
-
-      if (hardwareMeta) {
-        const parts = [];
-        parts.push(`Backend: ${API_BASE}`);
-        if (typeof allowRemote === 'boolean') parts.push(`allow_remote_hardware=${allowRemote}`);
-        if (typeof maxShots === 'number') parts.push(`max_shots_per_experiment=${maxShots.toLocaleString()}`);
-        hardwareMeta.textContent = parts.join(' · ');
-      }
 
       const list = hardwareTargetsCache || [];
       if (!list.length) {
@@ -2841,12 +3029,35 @@
         meta2.className = 'hardware-meta';
         meta2.textContent = t.description || '';
 
+        const meta3 = document.createElement('div');
+        meta3.className = 'hardware-meta';
+        const summary = summarizeCapabilities(t.capabilities);
+        meta3.textContent = summary || 'Capabilities: pending';
+
         item.appendChild(top);
         item.appendChild(meta1);
         item.appendChild(meta2);
+        item.appendChild(meta3);
 
         hardwareList.appendChild(item);
       });
+    }
+
+    function updateHardwareCapabilityHint() {
+      const cap = hardwareCapabilitiesForId(hardwareSelect.value);
+      const summary = summarizeCapabilities(cap);
+      if (hardwareCapabilityHint) {
+        hardwareCapabilityHint.textContent = summary || 'Capabilities: not advertised';
+      }
+
+      const capMax = cap && Number.isFinite(cap.max_shots) ? Number(cap.max_shots) : null;
+      const labelCeiling = Number.isFinite(capMax) ? capMax : MAX_SHOTS_PER_EXPERIMENT;
+      if (shotLabel && Number.isFinite(labelCeiling)) {
+        shotLabel.textContent = `Shot budget (max ${Number(labelCeiling).toLocaleString()})`;
+      }
+      if (shotInput && Number.isFinite(labelCeiling)) {
+        shotInput.max = String(labelCeiling);
+      }
     }
 
     async function runSelectedPreset() {
@@ -2857,7 +3068,12 @@
 
       let shot_budget = Number.parseInt(String(shotInput.value || ''), 10);
       if (!Number.isFinite(shot_budget) || shot_budget <= 0) shot_budget = DEFAULT_SHOT_BUDGET;
-      shot_budget = Math.min(Math.max(shot_budget, 1), MAX_SHOTS_PER_EXPERIMENT);
+      const cap = hardwareCapabilitiesForId(hardware_target);
+      const capMax = cap && Number.isFinite(cap.max_shots) ? Number(cap.max_shots) : null;
+      const ceiling = Number.isFinite(capMax)
+        ? Math.min(capMax, MAX_SHOTS_PER_EXPERIMENT)
+        : MAX_SHOTS_PER_EXPERIMENT;
+      shot_budget = Math.min(Math.max(shot_budget, 1), ceiling);
 
       const notes = (notesInput?.value || '').trim() || null;
 
@@ -2882,9 +3098,13 @@
 
         setRunStatus(`Run complete · id=${run.id}`);
       } catch (err) {
-        setRunStatus(`Run failed: ${err.message}`);
-        if (err?.response?.error_detail?.message) {
-          showRunAlert(err.response.error_detail.message);
+        const payload = err?.response || {};
+        const msg = payload.error_message || payload.message || err.message;
+        const hint = payload.action_hint || payload?.error_detail?.action_hint;
+        setRunStatus(`Run failed: ${msg}`);
+        if (msg) {
+          const summary = hint ? `${msg} · ${hint}` : msg;
+          showRunAlert(summary);
         }
       } finally {
         runPresetBtn.disabled = false;
@@ -2991,19 +3211,24 @@
       chatPanel.scrollTop = chatPanel.scrollHeight;
     }
 
-    function interpretIntent(msg) {
-      const lower = msg.toLowerCase();
-      if (lower.includes('health') || lower.includes('stable') || lower.includes('coherence')) {
-        presetSelect.value = 'health';
-        scenePresetLabel.textContent = 'Qubit Health Diagnostics';
-        return 'I will configure the Qubit Health Diagnostics suite (T1/T2*/echo, optional RB) ' +
-               'for your selected backend. You can refine shot budget or backend in the Setup tab.';
-      }
-      if (lower.includes('latency')) {
-        presetSelect.value = 'latency';
-        scenePresetLabel.textContent = 'Latency Characterization';
-        return 'I will prepare a Latency Characterization bundle with low-shot DPD probes to measure ' +
-               'end-to-end and backend-only delay.';
+      function interpretIntent(msg) {
+        const lower = msg.toLowerCase();
+        if (lower.includes('health') || lower.includes('stable') || lower.includes('coherence')) {
+          presetSelect.value = 'health';
+          scenePresetLabel.textContent = 'Qubit Health Diagnostics';
+          return 'I will configure the Qubit Health Diagnostics suite (T1/T2*/echo, optional RB) ' +
+                 'for your selected backend. You can refine shot budget or backend in the Setup tab.';
+        }
+        if (lower.includes('hello quantum')) {
+          presetSelect.value = 'hello_quantum_sim';
+          scenePresetLabel.textContent = 'Hello Quantum (Sim)';
+          return 'I will run the Hello Quantum (Sim) quickstart on the local simulator so you can see KPIs immediately.';
+        }
+        if (lower.includes('latency')) {
+          presetSelect.value = 'latency';
+          scenePresetLabel.textContent = 'Latency Characterization';
+          return 'I will prepare a Latency Characterization bundle with low-shot DPD probes to measure ' +
+                 'end-to-end and backend-only delay.';
       }
       if (lower.includes('compare') || lower.includes('backend')) {
         presetSelect.value = 'backend_compare';
@@ -3046,6 +3271,7 @@
 
     hardwareSelect.addEventListener('change', () => {
       sceneHardwareLabel.textContent = hardwareSelect.options[hardwareSelect.selectedIndex]?.text || hardwareSelect.value;
+      updateHardwareCapabilityHint();
       updateInterpretationText();
     });
 

@@ -35,4 +35,5 @@ def test_budget_exhaustion_http_detail(monkeypatch):
             break
     assert data.get("status") == "failed"
     detail = data.get("error_detail") or {}
-    assert detail.get("code") == "session_budget_exhausted"
+    assert detail.get("code") == "BUDGET_EXHAUSTED"
+    assert data.get("error_code") == "BUDGET_EXHAUSTED"

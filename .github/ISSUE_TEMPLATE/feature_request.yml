@@ -1,0 +1,34 @@
+name: "Feature request"
+description: "Propose an improvement or new capability."
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem statement
+      description: What user problem are we trying to solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What should happen? Include UX or API examples if possible.
+      placeholder: As a user, when I ___, the system should ___ so that ___.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Any other approaches you thought about.
+  - type: input
+    id: metrics
+    attributes:
+      label: Success metrics
+      description: How would we know this feature worked? (adoption, latency, reliability, etc.)
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Links, screenshots, or related issues/PRs.

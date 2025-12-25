@@ -1,0 +1,54 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Run API",
+      "type": "shell",
+      "command": "uvicorn synqc_backend.api:app --host 0.0.0.0 --port 8001 --reload",
+      "options": {
+        "cwd": "backend",
+        "env": {
+          "SYNQC_REDIS_URL": "redis://localhost:6379/0",
+          "SYNQC_REQUIRE_API_KEY": "false"
+        }
+      },
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "Run worker",
+      "type": "shell",
+      "command": "python -m synqc_backend.worker",
+      "options": {
+        "cwd": "backend",
+        "env": {
+          "SYNQC_REDIS_URL": "redis://localhost:6379/0"
+        }
+      },
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "Run tests",
+      "type": "shell",
+      "command": "pytest",
+      "options": {
+        "cwd": "backend"
+      },
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Bring up Docker demo",
+      "type": "shell",
+      "command": "docker compose up --build",
+      "options": {
+        "cwd": "."
+      },
+      "problemMatcher": []
+    }
+  ]
+}

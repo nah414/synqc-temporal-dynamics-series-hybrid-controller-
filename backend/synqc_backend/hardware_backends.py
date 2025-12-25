@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 import random
 import time
 import zlib
@@ -9,12 +8,14 @@ from typing import Dict
 
 from .config import settings
 from .kpi_estimators import distribution_fidelity, fidelity_dist_from_counts
-from .models import ExperimentPreset, ExperimentStatus, KpiBundle
+from .logging_utils import get_logger
+from .metrics_recorder import provider_metrics
+from .models import ErrorCode, ExperimentPreset, ExperimentStatus, KpiBundle
 from .provider_clients import BaseProviderClient, ProviderClientError, load_provider_clients
 from .stats import Counts
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def _normalize_distribution(dist: Dict[str, float]) -> Dict[str, float]:
@@ -31,6 +32,8 @@ def _expected_distribution(preset: ExperimentPreset, rng: random.Random) -> Dict
         base = {"00": 0.55, "01": 0.22, "10": 0.14, "11": 0.09}
     elif preset is ExperimentPreset.BACKEND_COMPARE:
         base = {"00": 0.42, "01": 0.22, "10": 0.2, "11": 0.16}
+    elif preset is ExperimentPreset.HELLO_QUANTUM_SIM:
+        base = {"00": 0.7, "01": 0.15, "10": 0.1, "11": 0.05}
     else:
         # HEALTH, DPD_DEMO (or unknown)
         base = {"00": 0.64, "11": 0.28, "01": 0.05, "10": 0.03}
@@ -144,6 +147,10 @@ class LocalSimulatorBackend(BaseBackend):
             target_fidelity = 0.93 + rng.random() * 0.05
             latency = 18.0 + rng.random() * 10.0
             backaction = 0.2 + rng.random() * 0.1
+        elif preset is ExperimentPreset.HELLO_QUANTUM_SIM:
+            target_fidelity = 0.975 + rng.random() * 0.015  # 0.975–0.99
+            latency = 9.0 + rng.random() * 4.0
+            backaction = 0.08 + rng.random() * 0.04
         else:  # DPD_DEMO or unknown
             target_fidelity = 0.90 + rng.random() * 0.06
             latency = 12.0 + rng.random() * 8.0
@@ -334,20 +341,59 @@ class ProviderBackend(BaseBackend):
         Rigetti SDK, etc.). The simulation keeps the API stable for environments
         without credentials while still exercising the full flow.
         """
+        start_time = time.time()
 
         # If a live client is configured, prefer it to ensure raw_counts/expectations
         # reflect the provider SDK response instead of synthetic draws.
         if self._live_client:
             try:
-                return self._run_live(preset, shot_budget)
+                result = self._run_live(preset, shot_budget)
+                latency = max(0.0, time.time() - start_time)
+                provider_metrics.record_success(self.id, latency)
+                logger.info(
+                    "Provider live run succeeded",
+                    extra={
+                        "hardware_target": self.id,
+                        "vendor": self.vendor,
+                        "preset": preset.value,
+                        "shot_budget": shot_budget,
+                        "latency_s": latency,
+                    },
+                )
+                return result
             except ProviderClientError as exc:
+                latency = max(0.0, time.time() - start_time)
+                code = getattr(exc, "code", None)
+                provider_metrics.record_failure(self.id, code.value if code else None, latency)
                 logger.warning(
-                    "Live provider execution failed for %s: %s",
-                    self.id,
-                    exc,
+                    "Live provider execution failed",
+                    extra={
+                        "hardware_target": self.id,
+                        "vendor": self.vendor,
+                        "preset": preset.value,
+                        "shot_budget": shot_budget,
+                        "error_code": code.value if code else None,
+                        "error_message": str(exc),
+                        "latency_s": latency,
+                    },
                 )
                 if not settings.allow_provider_simulation:
                     raise
+            except Exception as exc:  # noqa: BLE001 - defensive guard for unexpected failures
+                latency = max(0.0, time.time() - start_time)
+                provider_metrics.record_failure(self.id, ErrorCode.PROVIDER_ERROR.value, latency)
+                logger.exception(
+                    "Live provider execution crashed",
+                    extra={
+                        "hardware_target": self.id,
+                        "vendor": self.vendor,
+                        "preset": preset.value,
+                        "shot_budget": shot_budget,
+                        "latency_s": latency,
+                    },
+                )
+                if not settings.allow_provider_simulation:
+                    raise ProviderClientError(f"Live provider call failed: {exc}") from exc
 
         if not settings.allow_provider_simulation:
             raise RuntimeError(
@@ -356,7 +402,19 @@ class ProviderBackend(BaseBackend):
                 "or provide a live provider client via SYNQC_PROVIDER_PAYLOAD_<BACKEND_ID>."
             )
 
-        return self._simulate(preset, shot_budget)
+        sim_start = time.time()
+        result = self._simulate(preset, shot_budget)
+        provider_metrics.record_simulated(self.id, max(0.0, time.time() - sim_start))
+        logger.info(
+            "Provider simulation path used",
+            extra={
+                "hardware_target": self.id,
+                "vendor": self.vendor,
+                "preset": preset.value,
+                "shot_budget": shot_budget,
+            },
+        )
+        return result
 
 _PROVIDER_CLIENTS = load_provider_clients()
 

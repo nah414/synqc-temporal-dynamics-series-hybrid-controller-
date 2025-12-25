@@ -19,7 +19,8 @@ ENV/
 # OS / Editor
 .DS_Store
 Thumbs.db
-.vscode/
+.vscode/*
+!.vscode/tasks.json
 .idea/
 
 # Archives

@@ -1,0 +1,59 @@
+<svg width="960" height="360" viewBox="0 0 960 360" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="SynQc how it works">
+  <style>
+    .node { fill: #0c1a33; stroke: #3ad5ff; stroke-width: 2; rx: 14; }
+    .label { fill: #e8f7ff; font-family: 'Segoe UI', sans-serif; font-size: 18px; font-weight: 700; text-anchor: middle; }
+    .sub { fill: #9ddcff; font-family: 'Segoe UI', sans-serif; font-size: 13px; text-anchor: middle; }
+    .arrow { stroke: #3ad5ff; stroke-width: 3; marker-end: url(#arrowhead); }
+  </style>
+  <defs>
+    <linearGradient id="bg2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#040812" />
+      <stop offset="100%" stop-color="#0d1f36" />
+    </linearGradient>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="0" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#3ad5ff" />
+    </marker>
+  </defs>
+  <rect width="960" height="360" fill="url(#bg2)" />
+
+  <rect x="40" y="110" width="140" height="140" class="node" />
+  <text x="110" y="155" class="label">UI</text>
+  <text x="110" y="180" class="sub">Preset picker</text>
+  <text x="110" y="200" class="sub">KPI tiles</text>
+  <text x="110" y="220" class="sub">History table</text>
+
+  <line x1="180" y1="180" x2="280" y2="180" class="arrow" />
+
+  <rect x="280" y="110" width="140" height="140" class="node" />
+  <text x="350" y="155" class="label">API</text>
+  <text x="350" y="180" class="sub">FastAPI</text>
+  <text x="350" y="200" class="sub">Guardrails + auth</text>
+  <text x="350" y="220" class="sub">Structured errors</text>
+
+  <line x1="420" y1="180" x2="520" y2="180" class="arrow" />
+
+  <rect x="520" y="110" width="140" height="140" class="node" />
+  <text x="590" y="155" class="label">Queue</text>
+  <text x="590" y="180" class="sub">Redis</text>
+  <text x="590" y="200" class="sub">Backpressure gauges</text>
+  <text x="590" y="220" class="sub">Per-target metrics</text>
+
+  <line x1="660" y1="180" x2="760" y2="180" class="arrow" />
+
+  <rect x="760" y="40" width="160" height="120" class="node" />
+  <text x="840" y="80" class="label">Provider</text>
+  <text x="840" y="105" class="sub">Simulator + IBM</text>
+  <text x="840" y="125" class="sub">Braket / IonQ ready</text>
+
+  <line x1="760" y1="220" x2="760" y2="240" class="arrow" />
+  <line x1="760" y1="240" x2="840" y2="240" class="arrow" />
+
+  <rect x="760" y="220" width="160" height="120" class="node" />
+  <text x="840" y="260" class="label">Store</text>
+  <text x="840" y="285" class="sub">SQLite/Redis</text>
+  <text x="840" y="305" class="sub">KPIs + artifacts</text>
+
+  <line x1="720" y1="280" x2="520" y2="280" class="arrow" />
+  <line x1="480" y1="280" x2="280" y2="280" class="arrow" />
+  <line x1="240" y1="280" x2="110" y2="280" class="arrow" />
+</svg>

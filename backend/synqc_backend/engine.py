@@ -9,7 +9,6 @@ import random
 from .budget import BudgetTracker
 from .config import settings
 from .control_profiles import ControlProfile, ControlProfileStore
-from .hardware_backends import get_backend
 from .models import (
     ExperimentPreset,
     ExperimentStatus,
@@ -25,6 +24,8 @@ from .models import (
 from .qubit_usage import SessionQubitTracker
 from .kpi_estimators import fidelity_dist_ci95_from_counts
 from .physics_contract import infer_contract, kpi_definition_id_for_name
+from .hardware_backends import get_backend as legacy_get_backend
+from .providers import run_experiment as run_provider_experiment
 from .storage import ExperimentStore
 
 
@@ -34,6 +35,11 @@ class BudgetExceeded(Exception):
     def __init__(self, remaining: int):
         self.remaining = remaining
         super().__init__(f"Session shot budget exhausted; remaining={remaining}")
+
+
+# Backward-compatible alias used by tests/legacy callers
+def get_backend(target_id: str):  # pragma: no cover - shim for legacy hooks
+    return legacy_get_backend(target_id)
 
 
 class SynQcEngine:
@@ -139,6 +145,7 @@ class SynQcEngine:
 
         # Scale by preset complexity
         preset_scale = {
+            ExperimentPreset.HELLO_QUANTUM_SIM: 0.55,
             ExperimentPreset.LATENCY: 0.45,
             ExperimentPreset.HEALTH: 0.65,
             ExperimentPreset.DPD_DEMO: 0.5,
@@ -297,10 +304,12 @@ class SynQcEngine:
         """Run a high-level SynQc experiment according to the request."""
         effective_shot_budget, warn_for_target = self._apply_shot_guardrails(req, session_id)
 
-        backend = get_backend(req.hardware_target)
         start = time.time()
         active_controls = req.control_overrides or self._control_store.get()
-        kpis = backend.run_experiment(req.preset, effective_shot_budget)
+        provider_result = run_provider_experiment(
+            req.hardware_target, req.preset, effective_shot_budget
+        )
+        kpis = provider_result.kpis
         kpis = self._apply_control_profile(kpis, active_controls)
         end = time.time()
 
@@ -361,6 +370,7 @@ class SynQcEngine:
             physics_contract=physics_contract,
             kpi_details=kpi_details or None,
             kpi_observations=kpi_details or None,
+            artifacts=provider_result.artifacts or None,
             workflow_trace=self._build_workflow_trace(req, kpis, active_controls),
         )
 

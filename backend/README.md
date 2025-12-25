@@ -45,6 +45,11 @@ This package provides:
   metadata. Once `wheel` is available, use the helper script to bypass build
   isolation so `pip` reuses the system `setuptools`/`wheel` instead of trying to
   download them through a blocked proxy.
+- The dev container and CI both use `backend/requirements.lock` to pre-build
+  wheels (core runtime + Qiskit + Braket + IonQ extras), reducing proxy friction
+  and keeping installs repeatable. If you update dependencies, rebuild the wheel
+  cache (`pip wheel -r backend/requirements.lock`) or regenerate the lock list to
+  keep the image and automation consistent.
 
 ```bash
 python3.12 -m venv .venv
@@ -77,6 +82,12 @@ From the project root (where this README and `pyproject.toml` live):
 
 ```bash
 uvicorn synqc_backend.api:app --host 0.0.0.0 --port 8001 --reload
+```
+
+Run the dedicated worker in a separate process when you want API responsiveness and scalable execution threads:
+
+```bash
+python -m synqc_backend.worker
 ```
 
 Then you can access:

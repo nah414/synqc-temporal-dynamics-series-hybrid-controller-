@@ -17,6 +17,8 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+      worker:
+        condition: service_started
     healthcheck:
       test:
         [
@@ -29,6 +31,20 @@ services:
       timeout: 3s
       retries: 5
       start_period: 10s
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: ["python", "-m", "synqc_backend.worker"]
+    environment:
+      SYNQC_REDIS_URL: ${SYNQC_REDIS_URL:-redis://redis:6379/0}
+      SYNQC_HEALTH_CACHE_TTL_SECONDS: ${SYNQC_HEALTH_CACHE_TTL_SECONDS:-3}
+      SYNQC_REQUIRE_API_KEY: "false"
+    depends_on:
+      redis:
+        condition: service_healthy
     restart: unless-stopped
 
   redis:

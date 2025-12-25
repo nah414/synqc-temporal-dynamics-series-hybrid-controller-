@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import atexit
+import logging
 import secrets
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
 from time import monotonic
 from typing import List, Optional
 
-from fastapi import Depends, FastAPI, Header, HTTPException, status
+from fastapi import Depends, FastAPI, Header, HTTPException, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from .budget import BudgetTracker
@@ -17,13 +20,17 @@ from .engine import SynQcEngine
 from .auth import auth_router
 from .auth.store import AuthStore
 from .auth.deps import require_scopes
-from .hardware_backends import list_backends
+from .providers import capabilities as provider_capabilities
+from .providers import list_targets as list_provider_targets
+from .providers import validate_credentials as validate_provider_credentials
 from .physics_router import router as physics_router
 from .jobs import JobQueue
+from .run_queue import build_run_queue
 from .metrics import MetricsExporter
 from .models import (
     ExperimentPreset,
     ExperimentStatus,
+    ErrorCode,
     HardwareTarget,
     HardwareTargetsResponse,
     RunExperimentRequest,
@@ -37,9 +44,14 @@ from .models import (
 from .qubit_usage import SessionQubitTracker
 from .storage import ExperimentStore
 from .redis_bus import close_redis, redis_ping
+from .logging_utils import configure_json_logging, log_context, set_log_context, get_logger
+from .metrics_recorder import provider_metrics, run_metrics
+from importlib import metadata
 
 
 # Instantiate storage, budget tracker, engine, and queue
+configure_json_logging()
+
 persist_path = Path("./synqc_experiments.json")
 store = ExperimentStore(max_entries=512, persist_path=persist_path)
 budget_tracker = BudgetTracker(
@@ -55,7 +67,7 @@ engine = SynQcEngine(
     control_store=control_store,
     usage_tracker=qubit_tracker,
 )
-queue = JobQueue(
+_embedded_queue = JobQueue(
     engine.run_experiment,
     max_workers=settings.worker_pool_size,
     store=store,
@@ -63,6 +75,7 @@ queue = JobQueue(
     job_timeout_seconds=settings.job_timeout_seconds,
     max_pending=settings.job_queue_max_pending,
 )
+queue = build_run_queue(_embedded_queue)
 metrics_exporter = MetricsExporter(
     budget_tracker=budget_tracker,
     queue=queue,
@@ -74,12 +87,74 @@ metrics_exporter = MetricsExporter(
 metrics_exporter.start()
 atexit.register(queue.shutdown, timeout=settings.job_graceful_shutdown_seconds)
 
+logger = get_logger(__name__)
+
+
+def _seed_demo_runs() -> None:
+    if not store.is_empty:
+        return
+
+    demo_requests = [
+        RunExperimentRequest(
+            preset=ExperimentPreset.HELLO_QUANTUM_SIM,
+            hardware_target="sim_local",
+            shot_budget=512,
+            notes="Hello Quantum quickstart (sim)",
+        ),
+        RunExperimentRequest(
+            preset=ExperimentPreset.HEALTH,
+            hardware_target="sim_local",
+            shot_budget=1024,
+            notes="Stability smoke-check",
+        ),
+        RunExperimentRequest(
+            preset=ExperimentPreset.LATENCY,
+            hardware_target="sim_local",
+            shot_budget=640,
+            notes="Latency probe",
+        ),
+        RunExperimentRequest(
+            preset=ExperimentPreset.BACKEND_COMPARE,
+            hardware_target="aws_braket",
+            shot_budget=1200,
+            notes="A/B vs simulator",
+        ),
+        RunExperimentRequest(
+            preset=ExperimentPreset.DPD_DEMO,
+            hardware_target="sim_local",
+            shot_budget=720,
+            notes="Guided DPD trace",
+        ),
+        RunExperimentRequest(
+            preset=ExperimentPreset.HEALTH,
+            hardware_target="ibm_quantum",
+            shot_budget=900,
+            notes="Platform drift check",
+        ),
+    ]
+
+    for req in demo_requests:
+        try:
+            engine.run_experiment(req, session_id="demo-seed")
+        except Exception as exc:  # pragma: no cover - defensive bootstrap
+            logger.warning("Demo seed failed for %s on %s: %s", req.preset, req.hardware_target, exc)
+
+
+_seed_demo_runs()
+
 app = FastAPI(
     title="SynQc Temporal Dynamics Series Backend",
     description=(
         "Backend API for SynQc TDS console — exposes high-level experiment presets "
         "(health, latency, backend comparison, DPD demo) and returns KPIs.")
 )
+
+
+def _backend_version() -> str:
+    try:
+        return metadata.version("synqc-tds-backend")
+    except Exception:
+        return "unknown"
 
 auth_store = AuthStore(settings.auth_db_path)
 app.state.auth_store = auth_store
@@ -140,8 +215,13 @@ def require_api_key(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={
-                "code": "api_key_not_configured",
-                "message": "API key enforcement is enabled but no API key is configured on the server.",
+                "code": ErrorCode.INTERNAL_ERROR.value,
+                "error_code": ErrorCode.INTERNAL_ERROR.value,
+                "error_message": (
+                    "API key enforcement is enabled but no API key is configured on the server."
+                ),
+                "error_detail": {"code": ErrorCode.INTERNAL_ERROR.value},
+                "action_hint": "Set SYNQC_API_KEY or disable require_api_key.",
             },
         )
 
@@ -157,8 +237,11 @@ def require_api_key(
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail={
-            "code": "unauthorized",
-            "message": "Missing or invalid API credentials. Use X-Api-Key or Authorization: Bearer <token>.",
+            "code": ErrorCode.AUTH_REQUIRED.value,
+            "error_code": ErrorCode.AUTH_REQUIRED.value,
+            "error_message": "Missing or invalid API credentials. Use X-Api-Key or Authorization: Bearer <token>.",
+            "error_detail": {"code": ErrorCode.AUTH_REQUIRED.value},
+            "action_hint": "Pass X-Api-Key or Authorization: Bearer <token>.",
         },
         headers={"WWW-Authenticate": "Bearer"},
     )
@@ -197,6 +280,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def _inject_log_context(request: Request, call_next):
+    request_id = request.headers.get("X-Request-Id") or str(uuid.uuid4())
+    session_id = get_session_id(
+        x_session_id=request.headers.get("X-Session-Id"),
+        authorization=request.headers.get("Authorization"),
+        x_api_key=request.headers.get("X-Api-Key"),
+    )
+
+    with log_context(request_id=request_id, session_id=session_id, path=request.url.path, method=request.method):
+        response = await call_next(request)
+
+    response.headers["X-Request-Id"] = request_id
+    return response
+
 _HEALTH_CACHE: dict[str, object] = {"expires_at": 0.0, "payload": None}
 _HEALTH_CACHE_LOCK = Lock()
 
@@ -215,6 +314,8 @@ async def health() -> dict:
 
     payload = {
         "status": "ok",
+        "version": _backend_version(),
+        "server_time": datetime.now(timezone.utc).isoformat(),
         "env": settings.env,
         "max_shots_per_experiment": settings.max_shots_per_experiment,
         "max_shots_per_session": settings.max_shots_per_session,
@@ -230,10 +331,14 @@ async def health() -> dict:
             "collection_interval_seconds": settings.metrics_collection_interval_seconds,
         },
         "presets": [p.value for p in ExperimentPreset],
+        "visible_target_count": len(list_provider_targets()),
         "budget_tracker": budget_tracker.health_summary(),
         "queue": queue.stats(),
+        "queue_connectivity": getattr(queue, "health", lambda: {})(),
         "control_profile": control_store.get(),
         "qubit_usage": qubit_tracker.health(),
+        "persistence": store.health_summary(),
+        "provider_metrics": provider_metrics.health_summary(),
     }
     payload["redis"] = await redis_ping()
     if ttl_seconds > 0:
@@ -268,15 +373,18 @@ def get_hardware_targets() -> HardwareTargetsResponse:
     deployments can drive real hardware or run dry-runs without credentials.
     """
     targets: List[HardwareTarget] = []
-    for backend_id, backend in list_backends().items():
-        if (not settings.allow_remote_hardware) and backend_id != "sim_local":
+    for target_id, target in list_provider_targets().items():
+        if (not settings.allow_remote_hardware) and target.kind != "sim":
             continue
         targets.append(
             HardwareTarget(
-                id=backend_id,
-                name=backend.name,
-                kind=backend.kind,
-                description=("Local SynQc simulator" if backend.kind == "sim" else "Production hardware backend"),
+                id=target_id,
+                name=target.name,
+                kind=target.kind,
+                description=(
+                    "Local SynQc simulator" if target.kind == "sim" else "Production hardware backend"
+                ),
+                capabilities=provider_capabilities(target_id),
             )
         )
     return HardwareTargetsResponse(targets=targets)
@@ -304,17 +412,29 @@ def get_run_status(run_id: str, _: None = Depends(require_api_key)) -> RunStatus
 
     record = queue.get(run_id)
     if not record:
-        raise HTTPException(status_code=404, detail="Run not found")
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "code": ErrorCode.INVALID_REQUEST.value,
+                "error_code": ErrorCode.INVALID_REQUEST.value,
+                "error_message": "Run not found",
+                "error_detail": {"code": ErrorCode.INVALID_REQUEST.value},
+                "action_hint": "Verify the run id and try again.",
+            },
+        )
 
     return RunStatusResponse(
-        id=record.id,
-        status=RunJobStatus(record.status),
-        created_at=record.created_at,
-        started_at=record.started_at,
-        finished_at=record.finished_at,
-        error=record.error,
-        error_detail=record.error_detail,
-        result=record.result,
+        id=record.get("id"),
+        status=RunJobStatus(record.get("status", RunJobStatus.QUEUED)),
+        created_at=record.get("created_at"),
+        started_at=record.get("started_at"),
+        finished_at=record.get("finished_at"),
+        error=record.get("error"),
+        error_code=record.get("error_code"),
+        error_message=record.get("error_message"),
+        error_detail=record.get("error_detail"),
+        action_hint=record.get("action_hint"),
+        result=record.get("result"),
     )
 
 
@@ -340,42 +460,56 @@ def _enqueue_run(req: RunExperimentRequest, session_id: str) -> RunSubmissionRes
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
-                "code": "remote_hardware_disabled",
-                "message": "Remote hardware is disabled on this deployment",
+                "code": ErrorCode.REMOTE_DISABLED.value,
+                "error_code": ErrorCode.REMOTE_DISABLED.value,
+                "error_message": "Remote hardware is disabled on this deployment",
+                "error_detail": {"code": ErrorCode.REMOTE_DISABLED.value},
+                "action_hint": "Enable remote hardware or target sim_local.",
             },
         )
-    backends = list_backends()
-    if req.hardware_target not in backends:
+    targets = list_provider_targets()
+    if req.hardware_target not in targets:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
-                "code": "unknown_hardware_target",
-                "message": f"Unknown hardware_target '{req.hardware_target}'",
+                "code": ErrorCode.INVALID_TARGET.value,
+                "error_code": ErrorCode.INVALID_TARGET.value,
+                "error_message": f"Unknown hardware_target '{req.hardware_target}'",
+                "error_detail": {"code": ErrorCode.INVALID_TARGET.value},
+                "action_hint": "Pick a hardware target from /hardware/targets.",
             },
         )
-    backend = backends[req.hardware_target]
-    has_live_client = getattr(backend, "_live_client", None) is not None
-    if (
-        backend.kind != "sim"
-        and not settings.allow_provider_simulation
-        and settings.allow_remote_hardware
-        and not has_live_client
-    ):
+    target = targets[req.hardware_target]
+    credentials_ok = validate_provider_credentials(req.hardware_target)
+    if target.kind != "sim" and not (credentials_ok or settings.allow_provider_simulation):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
-                "code": "provider_simulation_disabled",
-                "message": (
-                    "Provider simulation is disabled; enable SYNQC_ALLOW_PROVIDER_SIMULATION=true or use sim_local."
+                "code": ErrorCode.PROVIDER_SIM_DISABLED.value,
+                "error_code": ErrorCode.PROVIDER_SIM_DISABLED.value,
+                "error_message": (
+                    "Provider simulation is disabled for this deployment"
                 ),
+                "error_detail": {"code": ErrorCode.PROVIDER_SIM_DISABLED.value},
+                "action_hint": "Enable SYNQC_ALLOW_PROVIDER_SIMULATION=true or supply provider credentials.",
             },
         )
 
-    record = queue.enqueue(req, session_id)
+    job_id, created_at = queue.enqueue(req, session_id)
+    logger.info(
+        "Run submitted",
+        extra={
+            "job_id": job_id,
+            "experiment_id": job_id,
+            "hardware_target": req.hardware_target,
+            "session_id": session_id,
+            "preset": req.preset.value if req.preset else None,
+        },
+    )
     return RunSubmissionResponse(
-        id=record.id,
+        id=job_id,
         status=RunJobStatus.QUEUED,
-        created_at=record.created_at,
+        created_at=created_at,
     )
 
 
@@ -384,7 +518,16 @@ def get_experiment(experiment_id: str, _: None = Depends(require_api_key)) -> Ru
     """Return a specific experiment run by id."""
     run = store.get(experiment_id)
     if not run:
-        raise HTTPException(status_code=404, detail="Experiment not found")
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "code": ErrorCode.INVALID_REQUEST.value,
+                "error_code": ErrorCode.INVALID_REQUEST.value,
+                "error_message": "Experiment not found",
+                "error_detail": {"code": ErrorCode.INVALID_REQUEST.value},
+                "action_hint": "Verify the experiment id and refresh.",
+            },
+        )
     return run
 
 
@@ -392,7 +535,16 @@ def get_experiment(experiment_id: str, _: None = Depends(require_api_key)) -> Ru
 def list_recent_experiments(limit: int = 50, _: None = Depends(require_api_key)) -> list[ExperimentSummary]:
     """Return the most recent experiment summaries (bounded)."""
     if limit <= 0:
-        raise HTTPException(status_code=400, detail="limit must be positive")
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": ErrorCode.INVALID_REQUEST.value,
+                "error_code": ErrorCode.INVALID_REQUEST.value,
+                "error_message": "limit must be positive",
+                "error_detail": {"code": ErrorCode.INVALID_REQUEST.value},
+                "action_hint": "Use a positive limit value.",
+            },
+        )
     return store.list_recent(limit=limit)
 
 

@@ -1,0 +1,29 @@
+{
+  "name": "SynQC fullstack",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/common-utils:2": {},
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+  "postCreateCommand": "pip install --no-index --find-links /usr/local/share/pip-wheels -r backend/requirements.lock && pip install --no-deps -e ./backend[dev,qiskit,braket,ionq]",
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "python.testing.pytestArgs": ["backend"],
+        "python.testing.unittestEnabled": false,
+        "python.testing.pytestEnabled": true
+      },
+      "extensions": [
+        "ms-python.python",
+        "ms-azuretools.vscode-docker",
+        "github.vscode-github-actions"
+      ]
+    }
+  },
+  "forwardPorts": [8001, 8080, 6379],
+  "remoteUser": "vscode"
+}

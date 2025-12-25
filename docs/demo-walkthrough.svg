@@ -1,0 +1,66 @@
+<svg width="960" height="540" viewBox="0 0 960 540" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="SynQc demo walkthrough">
+  <style>
+    .panel { fill: #0b1021; stroke: #3ad5ff; stroke-width: 2; rx: 12; }
+    .title { fill: #e8f7ff; font-family: 'Segoe UI', sans-serif; font-size: 20px; font-weight: 700; }
+    .text { fill: #d9e6ff; font-family: 'Segoe UI', sans-serif; font-size: 16px; }
+    .kpi { fill: #111a33; stroke: #9ffcff; stroke-width: 1.5; rx: 10; }
+    .kpi-label { fill: #9ffcff; font-family: 'Segoe UI', sans-serif; font-size: 14px; }
+    .kpi-value { fill: #ffffff; font-family: 'Consolas', monospace; font-size: 18px; font-weight: 700; }
+    .badge { fill: #1e2a4d; stroke: #f9d15c; stroke-width: 1; rx: 8; }
+    .badge-text { fill: #f9d15c; font-family: 'Segoe UI', sans-serif; font-size: 14px; font-weight: 700; }
+    .arrow { stroke: #3ad5ff; stroke-width: 3; marker-end: url(#arrowhead); }
+  </style>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#060b1a" />
+      <stop offset="100%" stop-color="#0c1f36" />
+    </linearGradient>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="0" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#3ad5ff" />
+    </marker>
+  </defs>
+  <rect width="960" height="540" fill="url(#bg)"/>
+  <rect x="30" y="30" width="900" height="480" class="panel" fill-opacity="0.8" />
+  <text x="50" y="70" class="title">SynQc preset demo (simulator)</text>
+  <rect x="50" y="100" width="180" height="320" class="panel" fill-opacity="0.55" />
+  <text x="65" y="130" class="text">1) Choose preset</text>
+  <rect x="65" y="150" width="150" height="40" class="badge" />
+  <text x="75" y="175" class="badge-text">Hello Quantum (Sim)</text>
+  <rect x="65" y="210" width="150" height="40" class="badge" stroke="#3ad5ff" />
+  <text x="80" y="235" class="badge-text">Run preset ▶</text>
+  <text x="65" y="280" class="text">GPU/CPU ready</text>
+  <text x="65" y="310" class="text">Simulator max shots</text>
+  <text x="65" y="340" class="text">Queue depth: inline</text>
+  
+  <line x1="220" y1="230" x2="320" y2="230" class="arrow" />
+  
+  <rect x="320" y="110" width="270" height="140" class="panel" fill-opacity="0.55" />
+  <text x="340" y="140" class="text">2) KPIs update live</text>
+  <rect x="340" y="160" width="110" height="70" class="kpi" />
+  <text x="350" y="185" class="kpi-label">Fidelity</text>
+  <text x="350" y="205" class="kpi-value">99.2%</text>
+  <rect x="470" y="160" width="110" height="70" class="kpi" />
+  <text x="480" y="185" class="kpi-label">Latency</text>
+  <text x="480" y="205" class="kpi-value">128 ms</text>
+
+  <line x1="450" y1="250" x2="450" y2="320" class="arrow" />
+
+  <rect x="320" y="320" width="270" height="120" class="panel" fill-opacity="0.55" />
+  <text x="340" y="350" class="text">3) History fills in</text>
+  <text x="340" y="380" class="text">#1420  • preset=Hello Quantum • sim_local</text>
+  <text x="340" y="405" class="text">#1421  • preset=Hello Quantum • kpis saved</text>
+  <text x="340" y="430" class="text">#1422  • preset=Hello Quantum • artifacts ✓</text>
+
+  <line x1="590" y1="210" x2="840" y2="210" class="arrow" />
+
+  <rect x="620" y="120" width="270" height="130" class="panel" fill-opacity="0.55" />
+  <text x="640" y="150" class="text">4) Details view</text>
+  <text x="640" y="175" class="text">- raw counts saved</text>
+  <text x="640" y="195" class="text">- provider backend tagged</text>
+  <text x="640" y="215" class="text">- error_code + action_hint</text>
+
+  <rect x="620" y="280" width="270" height="140" class="panel" fill-opacity="0.55" />
+  <text x="640" y="310" class="text">5) KPIs + history stay cached</text>
+  <text x="640" y="335" class="text">Even after refresh</text>
+  <text x="640" y="360" class="text">Seeded experiments keep table warm</text>
+</svg>

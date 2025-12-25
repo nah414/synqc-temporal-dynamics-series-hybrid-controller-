@@ -39,4 +39,5 @@ def test_overbudget_run_persists_failure_for_listing(monkeypatch):
     listing = client.get("/experiments/recent?limit=10").json()
     found = next((r for r in listing if r["id"] == run_id), None)
     assert found is not None
-    assert found.get("error_detail", {}).get("code") == "session_budget_exhausted"
+    assert found.get("error_detail", {}).get("code") == "BUDGET_EXHAUSTED"
+    assert found.get("error_code") == "BUDGET_EXHAUSTED"

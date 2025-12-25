@@ -1,0 +1,125 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: ["main", "master", "work"]
+
+jobs:
+  lint-and-format:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('backend/requirements.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.lock
+          pip install --no-deps -e .[dev,qiskit]
+
+      - name: Ruff lint
+        working-directory: backend
+        run: ruff check .
+
+      - name: Black format check
+        working-directory: backend
+        run: black --check .
+
+  tests:
+    runs-on: ubuntu-latest
+    needs: lint-and-format
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('backend/requirements.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.lock
+          pip install --no-deps -e .[dev,qiskit]
+
+      - name: Run tests
+        working-directory: backend
+        run: pytest
+
+  provider-smoke:
+    runs-on: ubuntu-latest
+    needs: tests
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('backend/requirements.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies (provider extras)
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.lock
+          pip install --no-deps -e .[dev,qiskit,braket,ionq]
+
+      - name: Run provider smoke tests
+        working-directory: backend
+        env:
+          SYNQC_ENABLE_PROVIDER_SMOKE: "true"
+          SYNQC_ALLOW_PROVIDER_SIMULATION: "true"
+          SYNQC_ENABLE_IONQ_DEMO: "true"
+          SYNQC_PROVIDER_PAYLOAD_AWS_BRAKET: '{"raw_counts":{"00":4,"11":6},"expected_distribution":{"00":0.4,"11":0.6}}'
+          SYNQC_ENABLE_AZURE_SMOKE: "true"
+          SYNQC_PROVIDER_PAYLOAD_AZURE_QUANTUM: '{"raw_counts":{"00":8,"11":12},"expected_distribution":{"00":0.4,"11":0.6},"shots_used":20}'
+          SYNQC_ENABLE_RIGETTI_SMOKE: "true"
+          SYNQC_PROVIDER_PAYLOAD_RIGETTI_FOREST: '{"raw_counts":{"00":14,"01":6},"expected_distribution":{"00":0.7,"01":0.3},"shots_used":20}'
+        run: pytest tests/test_provider_smoke_flags.py
+
+  container-build:
+    runs-on: ubuntu-latest
+    needs: tests
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build containers
+        run: docker compose -f docker-compose.yml build --progress plain
