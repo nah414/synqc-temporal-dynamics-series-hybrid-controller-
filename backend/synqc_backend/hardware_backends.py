@@ -7,6 +7,13 @@ from abc import ABC, abstractmethod
 from typing import Dict
 
 from .config import settings
+from .grover import (
+    GroverConfig,
+    GroverDependencyError,
+    energy_aware_search,
+    ideal_marked_distribution,
+    success_probability,
+)
 from .kpi_estimators import distribution_fidelity, fidelity_dist_from_counts
 from .logging_utils import get_logger
 from .metrics_recorder import provider_metrics
@@ -30,6 +37,8 @@ def _expected_distribution(preset: ExperimentPreset, rng: random.Random) -> Dict
 
     if preset is ExperimentPreset.LATENCY:
         base = {"00": 0.55, "01": 0.22, "10": 0.14, "11": 0.09}
+    elif preset is ExperimentPreset.GROVER_DEMO:
+        base = ideal_marked_distribution(5, ["10101", "01010"], background=0.01)
     elif preset is ExperimentPreset.BACKEND_COMPARE:
         base = {"00": 0.42, "01": 0.22, "10": 0.2, "11": 0.16}
     elif preset is ExperimentPreset.HELLO_QUANTUM_SIM:
@@ -125,6 +134,9 @@ class LocalSimulatorBackend(BaseBackend):
         super().__init__(id="sim_local", name="Local simulator", kind="sim" )
 
     def run_experiment(self, preset: ExperimentPreset, shot_budget: int) -> KpiBundle:
+        if preset is ExperimentPreset.GROVER_DEMO:
+            return self._run_grover_preset(shot_budget)
+
         # Clamp shots to something reasonable in this demo backend
         shots_used = min(shot_budget, settings.max_shots_per_experiment)
 
@@ -179,6 +191,51 @@ class LocalSimulatorBackend(BaseBackend):
             raw_counts=raw_counts,
             expected_distribution=expected_q,
             shots_used=measured_shots,
+            shot_budget=shot_budget,
+            status=status,
+        )
+
+    def _run_grover_preset(self, shot_budget: int) -> KpiBundle:
+        shots_cap = min(shot_budget, settings.max_shots_per_experiment)
+        cfg = GroverConfig(
+            n_qubits=5,
+            marked=["10101", "01010"],
+            iterations=None,
+            seed_sim=int(time.time()) & 0xFFFF,
+        )
+
+        expected_q = ideal_marked_distribution(cfg.n_qubits, cfg.marked, background=0.01)
+
+        try:
+            shots_used, counts, _success_est = energy_aware_search(
+                cfg, target_success=0.65, eps=0.08, delta=0.05, max_shots_cap=shots_cap, verbose=False
+            )
+        except GroverDependencyError as exc:
+            raise ProviderClientError(
+                "Grover preset requires the qiskit and qiskit-aer extras to run real circuits",
+                code=ErrorCode.PROVIDER_SIM_DISABLED,
+                action_hint="Install the 'backend[qiskit]' extra or enable a live provider target for Grover runs.",
+            ) from exc
+
+        fidelity = fidelity_dist_from_counts(counts, expected_q)
+        latency = 14.0 + random.random() * 6.0
+        backaction = 0.11 + random.random() * 0.07
+
+        status: ExperimentStatus
+        if fidelity < 0.9:
+            status = ExperimentStatus.FAIL
+        elif fidelity < 0.94:
+            status = ExperimentStatus.WARN
+        else:
+            status = ExperimentStatus.OK
+
+        return KpiBundle(
+            fidelity=fidelity,
+            latency_us=latency,
+            backaction=backaction,
+            raw_counts=counts,
+            expected_distribution=expected_q,
+            shots_used=shots_used,
             shot_budget=shot_budget,
             status=status,
         )

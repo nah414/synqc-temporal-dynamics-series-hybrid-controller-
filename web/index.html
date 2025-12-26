@@ -1017,6 +1017,38 @@
       opacity: 0.92;
     }
 
+    .grover-callout{
+      margin-top: 0.4rem;
+      padding: 0.55rem 0.7rem;
+      border-radius: 12px;
+      border: 1px solid rgba(109,132,255,0.4);
+      background: radial-gradient(circle at 20% 20%, rgba(117,207,255,0.14), rgba(60,78,126,0.28));
+      display: flex;
+      gap: 0.6rem;
+      align-items: flex-start;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.18);
+    }
+
+    .grover-icon{
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #7cf7ff, #9aa8ff);
+      color: #0b1533;
+      font-weight: 800;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 12px rgba(124,247,255,0.75);
+      font-size: 0.9rem;
+      flex-shrink: 0;
+    }
+
+    .grover-callout strong{
+      color: #e8ecff;
+      letter-spacing: 0.01em;
+    }
+
 </style>
 </head>
 <body>
@@ -1066,6 +1098,13 @@
         </div>
 
         <div class="agent-body">
+          <div class="grover-callout" aria-label="Grover search capability">
+            <span class="grover-icon" title="Grover badge">ψ</span>
+            <div>
+              <div><strong>Grover search ready</strong> — the Agent can dispatch a full Grover preset to the backend so you get real circuit results instead of a toy simulator.</div>
+              <div class="panel-sub">Use the Grover preset below or ask the Agent to “run Grover search” to exercise the Qiskit/Aer path.</div>
+            </div>
+          </div>
           <div class="agent-chat-log" id="agentChatLog">
             <div class="msg msg-agent">
               <strong>SynQc Guide:</strong> Welcome. Tell me what you want to learn or test.
@@ -1098,6 +1137,7 @@
                 <option value="hello_quantum_sim">Hello Quantum (Sim)</option>
                 <option value="health">Qubit Health Diagnostics (T1/T2/RB)</option>
                 <option value="latency">Latency Characterization</option>
+                <option value="grover_demo">Grover search (Qiskit/Aer)</option>
                 <option value="backend_compare">Backend A/B Comparison</option>
                 <option value="dpd_demo">Guided SynQc DPD Example</option>
               </select>
@@ -1262,6 +1302,7 @@
           <div class="filter-pill" data-filter="health">Health</div>
           <div class="filter-pill" data-filter="latency">Latency</div>
           <div class="filter-pill" data-filter="compare">Compare</div>
+          <div class="filter-pill" data-filter="grover">Grover search</div>
           <div class="filter-pill" data-filter="dpd">DPD demo</div>
           <div class="filter-pill" data-filter="failing">Failing targets</div>
         </div>
@@ -1418,6 +1459,7 @@
               <div class="filter-pill" data-filter="health">Health</div>
               <div class="filter-pill" data-filter="latency">Latency</div>
               <div class="filter-pill" data-filter="compare">Compare</div>
+              <div class="filter-pill" data-filter="grover">Grover search</div>
               <div class="filter-pill" data-filter="dpd">DPD demo</div>
               <div class="filter-pill" data-filter="failing">Failing targets</div>
             </div>
@@ -2007,6 +2049,7 @@
       if (preset === 'hello_quantum_sim') return 'Hello Quantum (Sim)';
       if (preset === 'health') return 'Health (T1/T2/RB)';
       if (preset === 'latency') return 'Latency probe';
+      if (preset === 'grover_demo') return 'Grover search (Qiskit/Aer)';
       if (preset === 'backend_compare') return 'Backend compare';
       if (preset === 'dpd_demo') return 'DPD demo';
       return preset;
@@ -2672,6 +2715,13 @@
         return `Backend comparison run completed on ${hwName}. This API version returns a single KPI bundle; multi-backend A/B is a planned extension.`;
       }
 
+      if (run.preset === 'grover_demo') {
+        const fid = (k.fidelity == null) ? null : Number(k.fidelity);
+        const success = (k.raw_counts && (k.raw_counts['10101'] || k.raw_counts['01010'])) ? 'Marked-state hits observed.' : 'Inspect counts to confirm marked-state hits.';
+        const fidText = fid == null ? 'Fidelity reported by the backend circuit path.' : `Estimated fidelity ${fid.toFixed(3)} from Aer-backed sampling.`;
+        return `Grover search executed on ${hwName}. ${fidText} ${success}`;
+      }
+
       if (run.preset === 'dpd_demo') {
         return `DPD demo completed on ${hwName}. Use this run to validate the Drive–Probe–Drive timing story, then graduate to health/latency presets.`;
       }
@@ -2704,6 +2754,9 @@
         sceneInterpretation.textContent =
           'Backend A/B Comparison will replay a reference experiment on two backends and report ' +
           'relative fidelity, coherence, and latency, so you can choose which is better for your workload.';
+      } else if (preset === 'grover_demo') {
+        sceneInterpretation.textContent =
+          'Grover search will compile a marked-state oracle + diffuser into a full Qiskit/Aer circuit so you can measure real shot-limited success rates instead of toy sampling.';
       } else if (preset === 'dpd_demo') {
         sceneInterpretation.textContent =
           'Guided SynQc DPD Example will show how a Drive–Probe–Drive sequence manipulates a single qubit ' +
@@ -2724,6 +2777,7 @@
           (filter === 'health' && p === 'health') ||
           (filter === 'latency' && p === 'latency') ||
           (filter === 'compare' && p === 'backend_compare') ||
+          (filter === 'grover' && p === 'grover_demo') ||
           (filter === 'dpd' && (p === 'dpd_demo' || p === 'hello_quantum_sim')) ||
           (filter === 'failing' && failing);
         row.style.display = show ? '' : 'none';

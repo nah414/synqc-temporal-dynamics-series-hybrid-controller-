@@ -22,11 +22,20 @@ UI → API → Queue → Provider → Store → UI
 ## Demo
 
 - docker compose up --build
-- open http://localhost:8080
+- open [`web/index.html`](web/index.html) (works offline; add `?api=http://localhost:8001` when the backend is running)
 - click “Run preset”
 - see KPIs + history + experiments table + details view
 - GitHub
 - +1
+
+### SynQc preset demo (simulator)
+
+- Console setup: keep the **Shot budget** and **Target** labels short so they fit inside the panel headers.
+- Run: press **Run preset** once and let the simulator autopopulate the KPI tiles and history rows.
+- KPIs: expect fidelity, latency, and backaction readouts to stay inside each tile without wrapping.
+- Tables: use the inline filters on **History** and **Experiments**; the text is trimmed to fit within each cell.
+
+> **Grover search badge (ψ)** — the Agent panel shows a glowing ψ badge and bold “Grover search ready” copy. It means the UI will submit the **Grover search preset** to the backend, which executes a real Qiskit/Aer Grover circuit (not a toy counter). If Qiskit isn’t installed, the backend will return a clear error asking you to install `backend[qiskit]` or switch to a live provider.
 
 ### Two-process layout (synqc-api + synqc-worker)
 

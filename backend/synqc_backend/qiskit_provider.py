@@ -9,10 +9,19 @@ that KPI extraction downstream stays stable.
 from __future__ import annotations
 
 import importlib.util
+import math
 import os
 from dataclasses import dataclass
 from typing import Dict
 
+from .grover import (
+    GroverConfig,
+    build_grover_circuit,
+    ideal_marked_distribution,
+    min_shots_for_confidence,
+    success_probability,
+)
+from .kpi_estimators import fidelity_dist_from_counts
 from .models import ErrorCode, ExperimentPreset
 from .provider_clients import BaseProviderClient, ProviderClientError, ProviderLiveResult
 from .stats import Counts
@@ -113,6 +122,86 @@ class QiskitProviderClient(BaseProviderClient):
     def _expected_distribution(self, preset: ExperimentPreset) -> Dict[str, float]:
         return _EXPECTED_BASELINES.get(preset, _EXPECTED_BASELINES[ExperimentPreset.DPD_DEMO])
 
+    def _execute(self, backend, circuit, shots: int, *, use_runtime: bool) -> Counts:
+        from qiskit import transpile
+
+        compiled = transpile(circuit, backend, optimization_level=self.optimization_level)
+        job = backend.run(compiled, shots=shots)
+        result = job.result()
+        counts_raw = result.get_counts(compiled)  # type: ignore[arg-type]
+        return {str(k): int(v) for k, v in counts_raw.items()}
+
+    def _run_grover_energy_search(self, backend, *, use_runtime: bool, shot_cap: int) -> ProviderLiveResult:
+        cfg = GroverConfig(
+            n_qubits=5,
+            marked=["10101", "01010"],
+            iterations=None,
+            shots=shot_cap,
+            seed_sim=None,
+        )
+
+        expected_distribution = ideal_marked_distribution(cfg.n_qubits, cfg.marked, background=0.01)
+
+        shots = max(16, min(min_shots_for_confidence(eps=0.08, delta=0.05), shot_cap))
+        last_counts: Counts = {}
+        last_success = 0.0
+        last_fidelity: float | None = None
+        shots_used = shots
+
+        def adaptive_target(base: float, fidelity: float | None) -> float:
+            """Raise the bar when fidelity degrades to avoid under-budgeting shots."""
+
+            if fidelity is None:
+                return base
+            penalty = max(0.0, 0.95 - fidelity)
+            # Cap growth so we do not request unrealistic success in noisy regimes.
+            return min(0.9, base + 0.5 * penalty)
+
+        while shots <= shot_cap:
+            circuit = build_grover_circuit(GroverConfig(**{**cfg.__dict__, "shots": shots}))
+            counts = self._execute(backend, circuit, shots, use_runtime=use_runtime)
+            success_est = success_probability(counts, cfg.marked)
+
+            fidelity_est: float | None
+            try:
+                fidelity_est = fidelity_dist_from_counts(counts, expected_distribution)
+            except ValueError:
+                fidelity_est = None
+
+            last_counts = counts
+            shots_used = shots
+            last_fidelity = fidelity_est
+
+            effective_success = success_est
+            if fidelity_est is not None:
+                # Discount apparent success when the distribution fidelity is poor.
+                effective_success *= max(0.35, fidelity_est)
+
+            threshold = adaptive_target(0.65, fidelity_est)
+            last_success = effective_success
+
+            if effective_success >= threshold:
+                break
+
+            next_shots = int(math.ceil(shots * 1.8))
+            if next_shots <= shots:
+                shots = shot_cap
+            else:
+                shots = min(shot_cap, next_shots)
+
+            if shots >= shot_cap and shots_used >= shot_cap:
+                # Already at the cap with no headroom; do not spin forever if fidelity gate remains unsatisfied.
+                break
+
+        return ProviderLiveResult(
+            raw_counts=last_counts,
+            expected_distribution=expected_distribution,
+            fidelity=last_fidelity,
+            latency_us=None,
+            backaction=None,
+            shots_used=min(shot_cap, max(shots_used, 0)),
+        )
+
     def _build_circuit(self, preset: ExperimentPreset):
         # Imports are deferred to keep the dependency optional until runtime.
         from qiskit import QuantumCircuit
@@ -146,29 +235,18 @@ class QiskitProviderClient(BaseProviderClient):
         use_runtime = self._runtime_configured()
         try:
             self._ensure_qiskit_available(use_runtime=use_runtime)
+            backend = self._resolve_backend(use_runtime=use_runtime)
 
-            from qiskit import transpile
+            if preset is ExperimentPreset.GROVER_DEMO:
+                return self._run_grover_energy_search(
+                    backend,
+                    use_runtime=use_runtime,
+                    shot_cap=max(1, int(shot_budget)),
+                )
 
             shots = max(1, int(shot_budget))
             circuit = self._build_circuit(preset)
-
-            backend = self._resolve_backend(use_runtime=use_runtime)
-
-            if use_runtime:
-                execution_backend = backend
-            else:
-                from qiskit_aer import AerSimulator
-
-                execution_backend = (
-                    backend if isinstance(backend, AerSimulator) else AerSimulator.from_backend(backend)
-                )
-
-            compiled = transpile(circuit, execution_backend, optimization_level=self.optimization_level)
-            job = execution_backend.run(compiled, shots=shots)
-            result = job.result()
-            counts_raw = result.get_counts()  # type: ignore[assignment]
-
-            counts: Counts = {str(k): int(v) for k, v in counts_raw.items()}
+            counts = self._execute(backend, circuit, shots, use_runtime=use_runtime)
             expected_distribution = self._expected_distribution(preset)
 
             return ProviderLiveResult(
