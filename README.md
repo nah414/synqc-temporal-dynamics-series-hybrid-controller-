@@ -41,7 +41,7 @@ UI → API → Queue → Provider → Store → UI
 - Use the provided tasks (Terminal → Run Task…) to run the API, worker, tests, or bring up the full Docker demo without extra setup.
 
 This repository combines:
-
+- Grovers Algorithm 
 - The **approved SynQc TDS frontend console look** (single-file UI).
 - A **FastAPI backend** that runs SynQc experiment presets and returns KPIs.
 - The **SynQc Temporal Dynamics Series technical archive** (for engineering + GPT context).
