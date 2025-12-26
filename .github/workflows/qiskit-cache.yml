@@ -1,0 +1,135 @@
+name: Qiskit wheel cache
+
+permissions:
+  contents: write
+  packages: write
+
+on:
+  push:
+    branches: ["main", "master", "work"]
+    paths:
+      - backend/requirements.lock
+      - backend/scripts/build_qiskit_cache.sh
+  workflow_dispatch:
+    inputs:
+      keep_versions:
+        description: "How many package versions to retain when pruning the GitHub Packages mirror"
+        required: false
+        default: "5"
+  schedule:
+    - cron: "0 6 * * 1"
+
+jobs:
+  build-qiskit-cache:
+    runs-on: ubuntu-latest
+    env:
+      KEEP_VERSIONS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.keep_versions || vars.QISKIT_CACHE_KEEP_VERSIONS || secrets.QISKIT_CACHE_KEEP_VERSIONS || '5' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('backend/requirements.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Build Qiskit wheel cache
+        working-directory: backend
+        env:
+          QISKIT_WHEEL_DIR: ${{ github.workspace }}/backend/synqc_backend/vendor/qiskit_wheels
+          QISKIT_WHEEL_TARBALL: ${{ github.workspace }}/backend/synqc_backend/vendor/qiskit_wheels.tar.gz
+        run: |
+          chmod +x scripts/build_qiskit_cache.sh
+          ./scripts/build_qiskit_cache.sh
+
+      - name: Capture requirements.lock hash
+        id: lock_hash
+        run: echo "hash=$(sha256sum backend/requirements.lock | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Compute package version
+        id: package_version
+        run: |
+          version="${{ steps.lock_hash.outputs.hash }}-${{ github.run_id }}"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload cache artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: qiskit-wheel-cache
+          path: backend/synqc_backend/vendor/qiskit_wheels.tar.gz
+          if-no-files-found: error
+
+      - name: Publish cache release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: qiskit-cache-latest
+          name: Qiskit wheel cache (latest)
+          body: |
+            Prebuilt Qiskit wheel cache tarball generated from backend/requirements.lock.
+            requirements.lock sha256: ${{ steps.lock_hash.outputs.hash }}
+            Workflow run: ${{ github.workflow }} #${{ github.run_number }} on ${{ github.ref }}
+          files: backend/synqc_backend/vendor/qiskit_wheels.tar.gz
+          make_latest: true
+          overwrite: true
+
+      - name: Mirror cache to GitHub Packages
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PACKAGE_NAME: qiskit-wheel-cache
+          PACKAGE_VERSION: ${{ steps.package_version.outputs.version }}
+          PACKAGE_FILE: backend/synqc_backend/vendor/qiskit_wheels.tar.gz
+        run: |
+          set -eo pipefail
+          upload() {
+            local version="$1"
+            local upload_url="https://uploads.github.com/repos/${{ github.repository }}/packages/generic/${PACKAGE_NAME}/${version}/files/$(basename "$PACKAGE_FILE")"
+            echo "Uploading ${PACKAGE_FILE} as version ${version}"
+            curl -L -X PUT \
+              -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+              -H "Content-Type: application/octet-stream" \
+              --upload-file "${PACKAGE_FILE}" \
+              "${upload_url}"
+          }
+
+          upload "${PACKAGE_VERSION}"
+          upload "latest"
+
+      - name: Prune old GitHub Packages cache versions
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PACKAGE_NAME: qiskit-wheel-cache
+          KEEP_VERSIONS: ${{ env.KEEP_VERSIONS }}
+        run: |
+          set -eo pipefail
+
+          API_ROOT="https://api.github.com"
+          PACKAGE_ENDPOINT="${API_ROOT}/repos/${{ github.repository }}/packages/generic/${PACKAGE_NAME}"
+
+          versions_json=$(curl -sS -H "Authorization: Bearer ${GITHUB_TOKEN}" -H "Accept: application/vnd.github+json" "${PACKAGE_ENDPOINT}/versions?per_page=100")
+
+          total_versions=$(echo "$versions_json" | jq 'length')
+          echo "Found ${total_versions} package versions"
+
+          # Keep the newest N versions (includes the versioned upload and 'latest' alias).
+          ids_to_delete=$(echo "$versions_json" | jq -r ".[${KEEP_VERSIONS}:].id | select(. != null)")
+
+          if [ -z "$ids_to_delete" ]; then
+            echo "No old versions to prune"
+            exit 0
+          fi
+
+          for id in $ids_to_delete; do
+            echo "Deleting package version id $id"
+            curl -sS -X DELETE \
+              -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              "${PACKAGE_ENDPOINT}/versions/${id}"
+          done

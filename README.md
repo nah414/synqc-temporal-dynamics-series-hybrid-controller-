@@ -46,7 +46,7 @@ UI → API → Queue → Provider → Store → UI
 ### VS Code / dev container quickstart
 
 - Open the repo in VS Code and choose **Reopen in Container** to use the bundled `.devcontainer` (Python 3.12 + Docker-in-Docker) with `backend[dev,qiskit,braket,ionq]` ready.
-- The dev container bakes in pre-built wheels from `backend/requirements.lock` (core + Qiskit + Braket + IonQ) so installs stay fast and deterministic even behind strict proxies.
+- The dev container bakes in pre-built wheels from `backend/requirements.lock` (core + Qiskit + Braket + IonQ) so installs stay fast and deterministic even behind strict proxies. A scheduled workflow also builds a Qiskit wheel cache tarball, uploads it to a `qiskit-cache-latest` release, mirrors it to GitHub Packages (with a `latest` alias), and prunes old package versions (default 5, overridable via a workflow input or repo variable/secret) to keep the registry lean for offline use.
 - Use the provided tasks (Terminal → Run Task…) to run the API, worker, tests, or bring up the full Docker demo without extra setup.
 
 This repository combines:

@@ -1,0 +1,19 @@
+# Minimal requirements for the Shor/RSA demo endpoints
+fastapi>=0.110
+pydantic>=2.0
+
+# Optional: run with uvicorn
+uvicorn[standard]>=0.27
+
+# Optional: quantum Shor support (version-flexible; install what matches your stack)
+# qiskit>=1.0
+# qiskit-aer>=0.13
+# qiskit-algorithms>=0.3
+
+# Optional: hardware providers (install the one that matches your target)
+# qiskit-ibm-runtime>=0.20
+# qiskit-braket-provider>=0.2
+# qiskit-ionq>=0.4
+
+# Optional: tests
+pytest>=7.0

@@ -236,7 +236,11 @@ def energy_aware_search(
         if success_estimate >= target_success:
             return shots, counts, success_estimate
 
-        shots = min(max_shots_cap, int(math.ceil(shots * 1.8)))
+        next_shots = min(max_shots_cap, int(math.ceil(shots * 1.8)))
+        if next_shots == shots:
+            return shots, counts, success_estimate
+
+        shots = next_shots
 
     capped_counts = run_grover(
         GroverConfig(
