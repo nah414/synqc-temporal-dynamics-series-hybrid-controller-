@@ -101,7 +101,16 @@ test('UI smoke: nav, API key, alerts, and tables', async ({ page }) => {
   await page.getByRole('button', { name: 'Hardware' }).click();
   await expect(page.locator('#hardwareList .hardware-item')).toHaveCount(2);
 
+  const hardwareBadge = page.locator('.hardware-badge').first();
+  await expect(hardwareBadge).toBeVisible();
+  const badgeWhiteSpace = await hardwareBadge.evaluate((el) => getComputedStyle(el).whiteSpace);
+  expect(badgeWhiteSpace).toBe('nowrap');
+
   await page.getByRole('button', { name: 'Console' }).click();
   await expect(page.locator('#historyBody tr')).toHaveCount(mockRuns.length);
   await expect(page.locator('#historyBody tr').nth(1)).toContainText('err_conn');
+
+  const historyFirstCell = page.locator('#historyBody td').first();
+  const cellWhiteSpace = await historyFirstCell.evaluate((el) => getComputedStyle(el).whiteSpace);
+  expect(cellWhiteSpace).toBe('nowrap');
 });

@@ -657,13 +657,7 @@
       font-size: 0.75rem; overflow-y: auto;
     }
     table { width: 100%; border-spacing: 0; border-collapse: collapse; }
-    th, td {
-      padding: 0.3rem 0.25rem;
-      text-align: left;
-      white-space: normal;
-      word-break: break-word;
-      overflow-wrap: anywhere;
-    }
+    th, td { padding: 0.3rem 0.25rem; text-align: left; white-space: nowrap; }
     th {
       color: var(--text-soft); font-weight: 500; font-size: 0.72rem;
       border-bottom: 1px solid var(--border-subtle);
@@ -992,9 +986,7 @@
       border: 1px solid rgba(123,132,200,0.55);
       color: rgba(215,225,255,0.8);
       background: rgba(7,9,26,0.9);
-      white-space: normal;
-      text-align: center;
-      max-width: 110px;
+      white-space: nowrap;
     }
     .hardware-meta{
       font-size: 0.74rem;
