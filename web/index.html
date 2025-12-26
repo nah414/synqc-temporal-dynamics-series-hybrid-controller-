@@ -1675,7 +1675,7 @@
             <h3>Workspace <span class="chip">live mirror</span></h3>
             <div class="panel-sub">Use this scratchpad to stage inputs from your plugged-in system and watch Shor settings update in real time.</div>
             <div class="workspace-note">
-              <textarea class="shor-textarea" id="shorWorkspaceNotes" placeholder="Commands, notes, or intermediate ciphertexts…"></textarea>
+              <textarea class="shor-textarea" id="shorWorkspaceNotes" data-shor-keep-enabled="true" placeholder="Commands, notes, or intermediate ciphertexts…"></textarea>
             </div>
             <div class="workspace-grid" aria-live="polite">
               <div class="workspace-tile">
@@ -2145,7 +2145,17 @@
       return {};
     }
 
+    const SHOR_LIVE_ALLOW_QUERY_AUTH = Boolean(window.SHOR_LIVE_ALLOW_QUERY_AUTH);
+
     function shorAuthQuery() {
+      if (!SHOR_LIVE_ALLOW_QUERY_AUTH) {
+        if ((AUTH.bearer || window.SYNQC_API_KEY) && !shorAuthQuery._warned) {
+          console.warn('Shor live channels are configured to avoid query-string auth. Prefer headers/cookies or set window.SHOR_LIVE_ALLOW_QUERY_AUTH=true if your backend requires URL tokens.');
+          shorAuthQuery._warned = true;
+        }
+        return '';
+      }
+
       const params = new URLSearchParams();
       if (AUTH.bearer) {
         params.set('bearer', AUTH.bearer.replace(/^Bearer\s+/i, ''));
@@ -2428,6 +2438,7 @@
       if (!shorPanel) return;
       shorPanel.classList.toggle('shor-busy', isBusy);
       shorPanel.querySelectorAll('button, input, select, textarea').forEach((el) => {
+        if (el.matches('[data-shor-keep-enabled]') || el.readOnly) return;
         el.disabled = isBusy;
       });
       const base = (shorRunStatus?.textContent || '').trim();
@@ -2696,7 +2707,6 @@
     }
 
     function startShorRunPolling() {
-      if (shorRunPollTimer) return;
       if (shorRunPollTimer) clearInterval(shorRunPollTimer);
       shorRunPollTimer = setInterval(() => refreshShorRuns({ silent: true }), SHOR_RUN_POLL_INTERVAL_MS);
       if (!startShorRunPolling._visibilityHooked) {
