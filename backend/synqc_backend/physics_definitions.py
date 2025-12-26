@@ -29,7 +29,7 @@ KPI_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "math": r"F_dist(\hat p, q) = (\sum_x \sqrt{\hat p(x) q(x)})^2",
         "requires": {
             "data": ["counts (bitstring->count) OR probabilities", "shots_executed", "expected_distribution q(x)"],
-            "estimator": "Plug-in estimator using \hat p from counts; optionally bootstrap CI via multinomial resampling.",
+            "estimator": r"Plug-in estimator using \hat p from counts; optionally bootstrap CI via multinomial resampling.",
         },
         "uncertainty": {
             "type": "bootstrap",

@@ -162,7 +162,10 @@ class LocalSimulatorBackend(BaseBackend):
 
         fidelity = None
         if target_fidelity is not None:
-            fidelity = fidelity_dist_from_counts(raw_counts, expected_q)
+            try:
+                fidelity = fidelity_dist_from_counts(raw_counts, expected_q)
+            except ValueError:
+                fidelity = None
 
         status: ExperimentStatus
         if fidelity is not None and fidelity < 0.9:
@@ -247,7 +250,10 @@ class ProviderBackend(BaseBackend):
         measured_shots = sum(raw_counts.values())
 
         if target_fidelity is not None:
-            fidelity = fidelity_dist_from_counts(raw_counts, expected_q)
+            try:
+                fidelity = fidelity_dist_from_counts(raw_counts, expected_q)
+            except ValueError:
+                fidelity = None
 
         status: ExperimentStatus
         if fidelity is not None and fidelity < 0.90:

@@ -16,6 +16,7 @@ class ExperimentPreset(str, Enum):
     LATENCY = "latency"
     BACKEND_COMPARE = "backend_compare"
     DPD_DEMO = "dpd_demo"
+    GROVER_DEMO = "grover_demo"
 
 
 class ExperimentStatus(str, Enum):

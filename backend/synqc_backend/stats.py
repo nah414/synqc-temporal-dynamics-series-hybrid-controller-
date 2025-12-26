@@ -66,7 +66,7 @@ def bootstrap_ci(
     alpha: float = 0.05,
     seed: int = 0,
 ) -> Tuple[float, float]:
-    """Bootstrap CI under multinomial resampling.
+    r"""Bootstrap CI under multinomial resampling.
 
     This is appropriate for metrics that are functions of the empirical
     distribution \hat p derived from counts.

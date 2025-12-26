@@ -1099,6 +1099,7 @@
                 <option value="health">Qubit Health Diagnostics (T1/T2/RB)</option>
                 <option value="latency">Latency Characterization</option>
                 <option value="backend_compare">Backend A/B Comparison</option>
+                <option value="grover_demo">Grover energy search (demo)</option>
                 <option value="dpd_demo">Guided SynQc DPD Example</option>
               </select>
             </div>
@@ -2008,6 +2009,7 @@
       if (preset === 'health') return 'Health (T1/T2/RB)';
       if (preset === 'latency') return 'Latency probe';
       if (preset === 'backend_compare') return 'Backend compare';
+      if (preset === 'grover_demo') return 'Grover energy search';
       if (preset === 'dpd_demo') return 'DPD demo';
       return preset;
     }
@@ -2668,6 +2670,17 @@
         return `Latency characterization completed on ${hwName}. End-to-end latency: ~${lat.toFixed(1)} µs. ${note}`;
       }
 
+      if (run.preset === 'grover_demo') {
+        const fid = Number.isFinite(Number(k.fidelity)) ? Number(k.fidelity) : null;
+        const budget = Number.isFinite(Number(k.shot_budget)) ? Number(k.shot_budget) : null;
+        const base = `Grover energy search completed on ${hwName}.`;
+        const fidText = fid == null
+          ? ' Fidelity was not reported by the backend; success probability will be derived from the returned counts.'
+          : ` Estimated marked-state success ~${fid.toFixed(3)}.`;
+        const budgetText = budget != null ? ` Adaptive shot cap: ${budget.toLocaleString()} shots.` : '';
+        return `${base}${fidText}${budgetText}`;
+      }
+
       if (run.preset === 'backend_compare') {
         return `Backend comparison run completed on ${hwName}. This API version returns a single KPI bundle; multi-backend A/B is a planned extension.`;
       }
@@ -2704,6 +2717,9 @@
         sceneInterpretation.textContent =
           'Backend A/B Comparison will replay a reference experiment on two backends and report ' +
           'relative fidelity, coherence, and latency, so you can choose which is better for your workload.';
+      } else if (preset === 'grover_demo') {
+        sceneInterpretation.textContent =
+          'Grover energy search adaptively allocates shots toward a marked state. Fidelity will be estimated from counts when available; backends that omit fidelity will still report success probability and cap usage.';
       } else if (preset === 'dpd_demo') {
         sceneInterpretation.textContent =
           'Guided SynQc DPD Example will show how a Drive–Probe–Drive sequence manipulates a single qubit ' +
