@@ -126,6 +126,12 @@ def _seed_demo_runs() -> None:
             notes="Guided DPD trace",
         ),
         RunExperimentRequest(
+            preset=ExperimentPreset.GROVER_DEMO,
+            hardware_target="sim_local",
+            shot_budget=640,
+            notes="Grover energy-aware search",
+        ),
+        RunExperimentRequest(
             preset=ExperimentPreset.HEALTH,
             hardware_target="ibm_quantum",
             shot_budget=900,

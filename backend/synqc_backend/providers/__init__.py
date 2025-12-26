@@ -35,7 +35,7 @@ _CAPABILITIES: Dict[str, ProviderCapabilities] = {
         max_shots=None,
         queue_behavior="inline",
         supported_gates=["h", "x", "y", "z", "cx", "rx", "ry", "cz"],
-        notes="Reference simulator for demo runs.",
+        notes="Reference simulator with Grover preset routed through Qiskit/Aer when installed.",
     ),
     "ibm_quantum": ProviderCapabilities(
         max_shots=32000,
