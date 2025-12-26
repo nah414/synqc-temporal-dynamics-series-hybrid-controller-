@@ -25,6 +25,7 @@ from .kpi_estimators import fidelity_dist_from_counts
 from .models import ErrorCode, ExperimentPreset
 from .provider_clients import BaseProviderClient, ProviderClientError, ProviderLiveResult
 from .stats import Counts
+from . import grover_utils
 
 
 _EXPECTED_BASELINES: Dict[ExperimentPreset, Dict[str, float]] = {
@@ -33,6 +34,7 @@ _EXPECTED_BASELINES: Dict[ExperimentPreset, Dict[str, float]] = {
     ExperimentPreset.BACKEND_COMPARE: {"00": 0.42, "01": 0.22, "10": 0.2, "11": 0.16},
     ExperimentPreset.HELLO_QUANTUM_SIM: {"00": 0.7, "01": 0.15, "10": 0.1, "11": 0.05},
     ExperimentPreset.DPD_DEMO: {"00": 0.64, "11": 0.28, "01": 0.05, "10": 0.03},
+    ExperimentPreset.GROVER_DEMO: {"00": 0.5, "01": 0.0, "10": 0.0, "11": 0.5},
 }
 
 
@@ -81,7 +83,7 @@ class QiskitProviderClient(BaseProviderClient):
 
         if importlib.util.find_spec("qiskit_aer") is None:
             raise ProviderClientError(
-                "qiskit-aer is required for the configured Qiskit backend. Install the 'qiskit' extra.",
+                "qiskit-aer is required for the configured Qiskit backend. Install qiskit-aer or the 'backend[qiskit]' extra.",
                 code=ErrorCode.PROVIDER_CREDENTIALS,
                 action_hint="Install qiskit-aer or target a runtime backend.",
             )
@@ -222,6 +224,9 @@ class QiskitProviderClient(BaseProviderClient):
             circuit.h(1)
             circuit.cz(0, 1)
             circuit.rx(0.2, 0)
+        elif preset is ExperimentPreset.GROVER_DEMO:
+            cfg = grover_utils.GroverConfig(n_qubits=2, marked=["11"], shots=1024)
+            return grover_utils.build_grover_circuit(cfg)
         else:  # DPD_DEMO or unknown
             circuit.h(0)
             circuit.cx(0, 1)
@@ -231,10 +236,78 @@ class QiskitProviderClient(BaseProviderClient):
         circuit.measure([0, 1], [0, 1])
         return circuit
 
+    def _execute(self, preset: ExperimentPreset, circuit, shots: int, *, use_runtime: bool) -> ProviderLiveResult:
+        backend = self._resolve_backend(use_runtime=use_runtime)
+
+        if use_runtime:
+            execution_backend = backend
+        else:
+            from qiskit_aer import AerSimulator
+
+            execution_backend = backend if isinstance(backend, AerSimulator) else AerSimulator.from_backend(backend)
+
+        from qiskit import transpile
+
+        compiled = transpile(circuit, execution_backend, optimization_level=self.optimization_level)
+        job = execution_backend.run(compiled, shots=shots)
+        result = job.result()
+        counts_raw = result.get_counts()  # type: ignore[assignment]
+
+        counts: Counts = {str(k): int(v) for k, v in counts_raw.items()}
+        expected_distribution = self._expected_distribution(preset)
+
+        return ProviderLiveResult(
+            raw_counts=counts,
+            expected_distribution=expected_distribution,
+            shots_used=shots,
+            fidelity=None,
+            latency_us=None,
+            backaction=None,
+        )
+
     def run(self, preset: ExperimentPreset, shot_budget: int) -> ProviderLiveResult:
         use_runtime = self._runtime_configured()
         try:
             self._ensure_qiskit_available(use_runtime=use_runtime)
+
+            shots = max(1, int(shot_budget))
+
+            if preset is ExperimentPreset.GROVER_DEMO:
+                initial_cfg = grover_utils.GroverConfig(n_qubits=2, marked=["11"], shots=min(64, shots))
+                counts: Counts = {}
+                success = 0.0
+                iterations: list[int] = []
+                while True:
+                    current_shots = min(initial_cfg.shots, shots)
+                    circuit = grover_utils.build_grover_circuit(initial_cfg.with_shots(current_shots))
+                    result = self._execute(preset, circuit, current_shots, use_runtime=use_runtime)
+                    iterations.append(current_shots)
+                    counts = result.raw_counts
+                    success = grover_utils.success_probability(counts=counts, marked={"11"})
+                    if success >= 0.9:
+                        break
+                    if current_shots >= shots and result.shots_used >= shots:
+                        break
+                    initial_cfg = initial_cfg.with_shots(min(current_shots * 2, shots))
+
+                fidelity = result.fidelity
+                if fidelity is None:
+                    try:
+                        fidelity = grover_utils.success_probability(counts=counts, marked={"11"})
+                    except Exception:
+                        fidelity = None
+
+                return ProviderLiveResult(
+                    raw_counts=counts,
+                    expected_distribution=self._expected_distribution(preset),
+                    shots_used=result.shots_used,
+                    fidelity=fidelity,
+                    latency_us=result.latency_us,
+                    backaction=result.backaction,
+                )
+
+            circuit = self._build_circuit(preset)
+            return self._execute(preset, circuit, shots, use_runtime=use_runtime)
             backend = self._resolve_backend(use_runtime=use_runtime)
 
             if preset is ExperimentPreset.GROVER_DEMO:
