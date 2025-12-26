@@ -2151,20 +2151,16 @@
     let shorLiveTokenCache = null;
 
     function shorAuthQuery() {
-      if (!SHOR_LIVE_ALLOW_QUERY_AUTH) {
-        if ((AUTH.bearer || window.SYNQC_API_KEY) && !shorAuthQuery._warned) {
-          console.warn('Shor live channels are configured to avoid query-string auth. Prefer headers/cookies or set window.SHOR_LIVE_ALLOW_QUERY_AUTH=true if your backend requires URL tokens.');
-          shorAuthQuery._warned = true;
-        }
-        return '';
+      // Avoid embedding long-lived credentials in URLs; prefer header auth and negotiated tokens.
+      if ((AUTH.bearer || window.SYNQC_API_KEY) && !shorAuthQuery._warned) {
+        console.warn('Shor live channels avoid query-string bearer/API keys. Configure a live-token endpoint or set window.SHOR_LIVE_QUERY_TOKEN with a short-lived value if your backend requires URL tokens.');
+        shorAuthQuery._warned = true;
       }
 
+      if (!SHOR_LIVE_ALLOW_QUERY_AUTH) return '';
+
       const params = new URLSearchParams();
-      if (AUTH.bearer) {
-        params.set('bearer', AUTH.bearer.replace(/^Bearer\s+/i, ''));
-      } else if (window.SYNQC_API_KEY) {
-        params.set('api_key', window.SYNQC_API_KEY);
-      }
+      if (window.SHOR_LIVE_QUERY_TOKEN) params.set('live_token', window.SHOR_LIVE_QUERY_TOKEN);
       return params.toString();
     }
 
