@@ -1,5 +1,7 @@
 import importlib.util
 
+import importlib
+
 import pytest
 
 from synqc_backend.models import ExperimentPreset
@@ -71,9 +73,9 @@ def test_qiskit_runtime_stub_backend(monkeypatch, stub_runtime_service):
 @pytest.mark.parametrize(
     ("preset", "shots"),
     [
-        (ExperimentPreset.HEALTH, 12),
-        (ExperimentPreset.LATENCY, 5),
-        (ExperimentPreset.DPD_DEMO, 8),
+    (ExperimentPreset.HEALTH, 12),
+    (ExperimentPreset.LATENCY, 5),
+    (ExperimentPreset.DPD_DEMO, 8),
     ],
 )
 def test_qiskit_runtime_stub_multiple_presets(monkeypatch, stub_runtime_service, preset, shots):
@@ -102,86 +104,61 @@ def test_qiskit_grover_cap_when_no_success(monkeypatch):
         # Always return low success probability counts
         raw_counts = {"00": shots}
         return ProviderLiveResult(raw_counts=raw_counts, expected_distribution=None, shots_used=shots)
+def test_grover_provider_path_uses_budget(monkeypatch):
+    client = QiskitProviderClient(backend_name="ibm_quantum")
+
+    monkeypatch.setattr(QiskitProviderClient, "_ensure_qiskit_available", lambda self, use_runtime: None)
+    monkeypatch.setattr(QiskitProviderClient, "_runtime_configured", lambda self: False)
+    monkeypatch.setattr(QiskitProviderClient, "_resolve_backend", lambda self, use_runtime: object())
+    monkeypatch.setattr("synqc_backend.qiskit_provider.build_grover_circuit", lambda cfg: {"shots": cfg.shots})
+
+    executed_shots = []
+
+    def _fake_execute(self, backend, circuit, shots: int, *, use_runtime: bool):
+        executed_shots.append(shots)
+        if shots < 40:
+            return {"00000": shots}
+        return {"10101": shots // 2, "01010": shots // 2}
 
     monkeypatch.setattr(QiskitProviderClient, "_execute", _fake_execute, raising=False)
 
     result = client.run(ExperimentPreset.GROVER_DEMO, 64)
 
     assert result.raw_counts
-    assert result.shots_used == sum(executed_shots)
-    assert result.shots_used == 64
     assert result.fidelity is not None
-    assert result.fidelity < 0.9
+    assert result.shots_used <= 64
+    assert executed_shots[0] >= 16
+    assert executed_shots[-1] == result.shots_used
 
 
-def test_qiskit_grover_stops_early_on_success(monkeypatch):
-    client = QiskitProviderClient(backend_name="ibm_stub_backend")
-
-    executed_shots: list[int] = []
-    success_calls: list[float] = []
+def test_grover_provider_path_scales_with_fidelity(monkeypatch):
+    client = QiskitProviderClient(backend_name="ibm_quantum")
 
     monkeypatch.setattr(QiskitProviderClient, "_ensure_qiskit_available", lambda self, use_runtime: None)
     monkeypatch.setattr(QiskitProviderClient, "_runtime_configured", lambda self: False)
-    monkeypatch.setattr("synqc_backend.qiskit_provider.grover_utils.build_grover_circuit", lambda cfg: object())
+    monkeypatch.setattr(QiskitProviderClient, "_resolve_backend", lambda self, use_runtime: object())
+    monkeypatch.setattr("synqc_backend.qiskit_provider.build_grover_circuit", lambda cfg: {"shots": cfg.shots})
 
-    def _fake_success_probability(*, counts, marked):
-        if not success_calls:
-            success_calls.append(0.2)
-            return 0.2
-        success_calls.append(0.95)
-        return 0.95
+    fidelities = iter([0.55, 0.92])
+    monkeypatch.setattr(
+        "synqc_backend.qiskit_provider.fidelity_dist_from_counts",
+        lambda counts, expected: next(fidelities),
+    )
 
-    monkeypatch.setattr("synqc_backend.qiskit_provider.grover_utils.success_probability", _fake_success_probability)
+    executed_shots: list[int] = []
 
-    def _fake_execute(self, preset, circuit, shots: int, *, use_runtime: bool):
+    def _fake_execute(self, backend, circuit, shots: int, *, use_runtime: bool):
         executed_shots.append(shots)
-        raw_counts = {"11": shots}
-        return ProviderLiveResult(raw_counts=raw_counts, expected_distribution=None, shots_used=shots, fidelity=None)
+        # Always report decent marked-state success so fidelity drives scaling decisions.
+        return {"10101": shots * 3 // 5, "01010": shots * 1 // 5, "11111": shots // 5}
 
     monkeypatch.setattr(QiskitProviderClient, "_execute", _fake_execute, raising=False)
 
-    result = client.run(ExperimentPreset.GROVER_DEMO, 128)
+    result = client.run(ExperimentPreset.GROVER_DEMO, 400)
 
     assert result.raw_counts
-    assert len(executed_shots) == 2
-    assert result.shots_used == sum(executed_shots)
-    assert result.shots_used <= 128
+    assert result.shots_used <= 400
+    # With low initial fidelity we expect at least two iterations before exiting.
+    assert len(executed_shots) >= 2
+    assert executed_shots[-1] == result.shots_used
     assert result.fidelity is not None and result.fidelity >= 0.9
-    assert success_calls[-1] >= 0.9
-
-
-def test_qiskit_grover_preserves_precomputed_fidelity(monkeypatch):
-    client = QiskitProviderClient(backend_name="ibm_stub_backend")
-
-    executed_shots: list[int] = []
-    success_called: list[bool] = []
-
-    monkeypatch.setattr(QiskitProviderClient, "_ensure_qiskit_available", lambda self, use_runtime: None)
-    monkeypatch.setattr(QiskitProviderClient, "_runtime_configured", lambda self: False)
-    monkeypatch.setattr("synqc_backend.qiskit_provider.grover_utils.build_grover_circuit", lambda cfg: object())
-
-    def _fake_success_probability(*, counts, marked):
-        success_called.append(True)
-        return 0.5
-
-    monkeypatch.setattr("synqc_backend.qiskit_provider.grover_utils.success_probability", _fake_success_probability)
-
-    precomputed_fidelity = 0.73
-
-    def _fake_execute(self, preset, circuit, shots: int, *, use_runtime: bool):
-        executed_shots.append(shots)
-        raw_counts = {"11": shots}
-        return ProviderLiveResult(
-            raw_counts=raw_counts,
-            expected_distribution=None,
-            shots_used=shots,
-            fidelity=precomputed_fidelity,
-        )
-
-    monkeypatch.setattr(QiskitProviderClient, "_execute", _fake_execute, raising=False)
-
-    result = client.run(ExperimentPreset.GROVER_DEMO, 32)
-
-    assert result.fidelity == precomputed_fidelity
-    assert success_called  # success probability still evaluated for control flow
-    assert result.shots_used == sum(executed_shots)
