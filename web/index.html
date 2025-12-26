@@ -1049,6 +1049,75 @@
       letter-spacing: 0.01em;
     }
 
+    /* Shor panel */
+    .panel-shor {
+      border: 1px solid var(--border-subtle);
+      box-shadow: 0 18px 38px rgba(0,0,0,0.4);
+    }
+    .shor-meta { display: flex; gap: 0.35rem; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+    .shor-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      padding: 0.35rem 0.6rem;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-soft);
+      font-size: 0.75rem;
+    }
+    .shor-chip::before {
+      content: '';
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: linear-gradient(135deg, #6ae5ff, #ffdd6e);
+      display: inline-block;
+    }
+    .shor-chip[data-state="warn"] { border-color: #ffb347; color: #ffd9a6; }
+    .shor-chip[data-state="bad"] { border-color: #ff4d6a; color: #ffd1d9; }
+    .shor-status { font-size: 0.78rem; color: var(--text-soft); }
+    .shor-status strong { color: var(--text-main); }
+    .shor-layout { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.9fr); gap: 0.8rem; }
+    @media (max-width: 1100px) { .shor-layout { grid-template-columns: minmax(0, 1fr); } }
+    .shor-card {
+      border-radius: 14px;
+      border: 1px solid var(--border-subtle);
+      background: rgba(7,9,26,0.94);
+      padding: 0.7rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+    }
+    .shor-card h3 { margin: 0; font-size: 0.95rem; letter-spacing: 0.02em; }
+    .shor-grid-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.55rem; }
+    .shor-grid-fields label { font-size: 0.75rem; color: var(--text-soft); }
+    .shor-input, .shor-select, .shor-textarea {
+      width: 100%;
+      border-radius: 10px;
+      border: 1px solid var(--border-subtle);
+      background: #07091c;
+      color: var(--text-main);
+      padding: 0.35rem 0.45rem;
+      font-size: 0.8rem;
+      outline: none;
+    }
+    .shor-textarea { min-height: 70px; resize: vertical; }
+    .shor-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+    .shor-btn { border-radius: 10px; border: 1px solid var(--border-subtle); padding: 0.45rem 0.7rem; font-size: 0.78rem; background: rgba(255,255,255,0.03); color: var(--text-main); cursor: pointer; }
+    .shor-btn.primary { background: linear-gradient(to right, #6ae5ff, #ffdd6e); color: #050412; font-weight: 700; border: none; }
+    .shor-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .shor-callout { border-radius: 12px; border: 1px solid rgba(106,229,255,0.35); background: rgba(10,16,32,0.9); padding: 0.65rem; font-size: 0.82rem; color: var(--text-soft); }
+    .shor-output { border-radius: 12px; border: 1px solid var(--border-subtle); background: rgba(5,7,18,0.96); padding: 0.6rem; font-size: 0.78rem; color: rgba(240,243,255,0.92); min-height: 180px; white-space: pre-wrap; word-break: break-word; }
+    .shor-runs { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.45rem; }
+    .shor-run { border-radius: 12px; border: 1px solid var(--border-subtle); background: rgba(255,255,255,0.03); padding: 0.5rem; display: flex; flex-direction: column; gap: 0.25rem; cursor: pointer; text-align: left; }
+    .shor-run__top { display: flex; justify-content: space-between; font-size: 0.78rem; color: var(--text-soft); }
+    .shor-run__bot { display: flex; justify-content: space-between; font-size: 0.8rem; }
+    .shor-run--bad { border-color: #ff4d6a; }
+    .shor-run__status { text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; }
+    .shor-help { font-size: 0.74rem; color: var(--text-soft); line-height: 1.5; }
+    .shor-guardrail { grid-column: 1 / -1; font-size: 0.75rem; color: #ffd9a6; background: rgba(255, 179, 71, 0.12); border: 1px solid rgba(255, 179, 71, 0.35); padding: 0.35rem 0.5rem; border-radius: 10px; }
+
 </style>
 </head>
 <body>
@@ -1305,6 +1374,7 @@
           <div class="filter-pill" data-filter="compare">Compare</div>
           <div class="filter-pill" data-filter="grover">Grover search</div>
           <div class="filter-pill" data-filter="dpd">DPD demo</div>
+          <div class="filter-pill" data-filter="shor">Shor crypto</div>
           <div class="filter-pill" data-filter="failing">Failing targets</div>
         </div>
         <div class="history-footer-note" id="failingTargetsConsole"></div>
@@ -1441,6 +1511,101 @@
           <div class="control-status" id="controlStatus">Awaiting backend profile…</div>
         </div>
       </section>
+      <section class="panel panel-shor spectralized" id="shorPanel">
+        <div class="panel-header">
+          <div>
+            <div class="panel-title">Shor's Algorithm</div>
+            <div class="panel-sub">Quantum RSA encryption/factoring surface backed by /shor/* endpoints</div>
+          </div>
+          <div class="shor-meta">
+            <div class="shor-chip" id="shorBackendChip" data-state="warn">/shor health: pending</div>
+            <div class="shor-status" id="shorStatus">Awaiting backend check…</div>
+            <button class="small-btn" type="button" id="shorHealthBtn">Recheck</button>
+          </div>
+        </div>
+        <div class="shor-layout">
+          <div class="shor-card">
+            <h3>Quantum control surface</h3>
+            <div class="shor-callout">
+              Use the controls below to generate guard-railed RSA keys, encrypt payloads, and drive Shor factoring/decryption against the backend. Hardware modes require your bearer token; the panel falls back to classical factoring when quantum hardware is unavailable.
+            </div>
+            <div class="shor-grid-fields">
+              <label for="shorPrimeBits">Prime bits</label>
+              <input class="shor-input" id="shorPrimeBits" type="number" value="12" min="4" step="1" />
+
+              <label for="shorModulus">N (modulus)</label>
+              <input class="shor-input" id="shorModulus" placeholder="e.g. 3233" />
+
+              <label for="shorExponent">e (public exponent)</label>
+              <input class="shor-input" id="shorExponent" placeholder="65537" value="65537" />
+
+              <label for="shorPlainInt">Plaintext (int)</label>
+              <input class="shor-input" id="shorPlainInt" placeholder="integer plaintext" />
+
+              <label for="shorPlainText">Plaintext (text)</label>
+              <input class="shor-input" id="shorPlainText" placeholder="UTF-8 text" />
+
+              <label for="shorCiphertext">Ciphertext (int)</label>
+              <input class="shor-input" id="shorCiphertext" placeholder="ciphertext integer" />
+            </div>
+
+            <div class="shor-grid-fields">
+              <label for="shorMethodSelect">Method</label>
+              <select class="shor-select" id="shorMethodSelect">
+                <option value="auto">auto (prefer Qiskit Shor)</option>
+                <option value="qiskit">qiskit (force Shor path)</option>
+                <option value="classical">classical fallback</option>
+              </select>
+
+              <label for="shorBackendSelect">Qiskit backend</label>
+              <select class="shor-select" id="shorBackendSelect">
+                <option value="aer">aer (local simulator)</option>
+                <option value="ibm">ibm (IBM Runtime)</option>
+                <option value="custom">custom provider</option>
+              </select>
+
+              <label for="shorShotsInput">Shots</label>
+              <input class="shor-input" id="shorShotsInput" type="number" value="1024" min="1" max="20000" />
+
+              <label for="shorIbmBackend">IBM backend name</label>
+              <input class="shor-input" id="shorIbmBackend" placeholder="e.g. ibm_oslo" />
+
+              <label for="shorProviderLoader">Provider loader (optional)</label>
+              <input class="shor-input" id="shorProviderLoader" placeholder="module:Class" />
+
+              <label for="shorProviderBackend">Provider backend name</label>
+              <input class="shor-input" id="shorProviderBackend" placeholder="provider backend (required for custom)" />
+
+              <div class="shor-guardrail" id="shorLimitNote">Guardrails: auto/aer capped near N≈32k, IBM/custom capped near N≈4k.</div>
+            </div>
+
+            <div class="shor-actions">
+              <button class="shor-btn" id="shorGenerateBtn" type="button">Generate demo RSA key</button>
+              <button class="shor-btn primary" id="shorEncryptBtn" type="button">Encrypt</button>
+              <button class="shor-btn" id="shorDecryptBtn" type="button">Decrypt (factor N)</button>
+              <button class="shor-btn" id="shorEstimateBtn" type="button">Estimate resources</button>
+              <button class="shor-btn" id="shorFactorBtn" type="button">Factor N</button>
+            </div>
+
+            <div class="shor-help">
+              <div>• Backend guardrails enforce small N for demos; plaintext must be &lt; N.</div>
+              <div>• IBM/custom modes expect your bearer token (synqc_bearer_token or api_key) and backend names.</div>
+              <div>• Output captures raw responses so you can inspect factoring steps and runtime.</div>
+            </div>
+          </div>
+          <div class="shor-card shor-card-output">
+            <h3>Telemetry</h3>
+            <div class="shor-status" id="shorRunStatus">Live output from /shor endpoints.</div>
+            <pre class="shor-output" id="shorOutput">{}</pre>
+            <div class="panel-sub" style="margin-top:0.2rem;">Recent runs (/shor/runs)</div>
+            <div class="shor-runs" id="shorRuns"></div>
+            <div class="shor-actions">
+              <button class="shor-btn" id="shorReloadRunsBtn" type="button">Reload runs</button>
+              <button class="shor-btn" id="shorOpenLatestBtn" type="button">Open latest</button>
+            </div>
+          </div>
+        </div>
+      </section>
         </div>
       </div>
 
@@ -1462,6 +1627,7 @@
               <div class="filter-pill" data-filter="compare">Compare</div>
               <div class="filter-pill" data-filter="grover">Grover search</div>
               <div class="filter-pill" data-filter="dpd">DPD demo</div>
+              <div class="filter-pill" data-filter="shor">Shor crypto</div>
               <div class="filter-pill" data-filter="failing">Failing targets</div>
             </div>
 
@@ -1752,6 +1918,39 @@
     const controlStatus = document.getElementById('controlStatus');
     const controlMeta = document.getElementById('controlMeta');
 
+    // Shor panel
+    const shorPanel = document.getElementById('shorPanel');
+    const shorBackendChip = document.getElementById('shorBackendChip');
+    const shorStatus = document.getElementById('shorStatus');
+    const shorRunStatus = document.getElementById('shorRunStatus');
+    const shorOutput = document.getElementById('shorOutput');
+    const shorRuns = document.getElementById('shorRuns');
+    const shorHealthBtn = document.getElementById('shorHealthBtn');
+    const shorReloadRunsBtn = document.getElementById('shorReloadRunsBtn');
+    const shorOpenLatestBtn = document.getElementById('shorOpenLatestBtn');
+
+    const shorPrimeBits = document.getElementById('shorPrimeBits');
+    const shorModulus = document.getElementById('shorModulus');
+    const shorExponent = document.getElementById('shorExponent');
+    const shorPlainInt = document.getElementById('shorPlainInt');
+    const shorPlainText = document.getElementById('shorPlainText');
+    const shorCiphertext = document.getElementById('shorCiphertext');
+    const shorMethodSelect = document.getElementById('shorMethodSelect');
+    const shorBackendSelect = document.getElementById('shorBackendSelect');
+    const shorShotsInput = document.getElementById('shorShotsInput');
+    const shorIbmBackend = document.getElementById('shorIbmBackend');
+    const shorProviderLoader = document.getElementById('shorProviderLoader');
+    const shorProviderBackend = document.getElementById('shorProviderBackend');
+    const shorLimitNote = document.getElementById('shorLimitNote');
+    const shorIbmLabel = document.querySelector('label[for="shorIbmBackend"]');
+    const shorProviderLoaderLabel = document.querySelector('label[for="shorProviderLoader"]');
+    const shorProviderBackendLabel = document.querySelector('label[for="shorProviderBackend"]');
+    const shorGenerateBtn = document.getElementById('shorGenerateBtn');
+    const shorEncryptBtn = document.getElementById('shorEncryptBtn');
+    const shorDecryptBtn = document.getElementById('shorDecryptBtn');
+    const shorEstimateBtn = document.getElementById('shorEstimateBtn');
+    const shorFactorBtn = document.getElementById('shorFactorBtn');
+
     // --------------------------------------------
     // Backend wiring
     // --------------------------------------------
@@ -1850,6 +2049,16 @@
     let healthCache = null;
 
     let controlProfileCache = null;
+
+    let shorRunsCache = [];
+    let shorHealthCache = null;
+    let SHOR_N_LIMITS = {
+      auto: { max: 32000, label: 'auto/aer guardrail ~32,000' },
+      aer: { max: 32000, label: 'auto/aer guardrail ~32,000' },
+      ibm: { max: 4096, label: 'IBM Runtime guardrail ~4,096' },
+      custom: { max: 4096, label: 'custom provider guardrail ~4,096' },
+      classical: { max: 5000000, label: 'classical guardrail ~5,000,000' },
+    };
 
     let activeWorkflowTrace = [];
     let workflowTimers = [];
@@ -2041,8 +2250,355 @@
       return await res.json();
     }
 
+    // --------------------------------------------
+    // Shor control surface
+    // --------------------------------------------
+    function shorParseIntField(value, name) {
+      const v = String(value ?? '').trim();
+      if (!v) return null;
+      if (!/^-?\d+$/.test(v)) throw new Error(`${name} must be an integer`);
+      const n = Number(v);
+      if (!Number.isFinite(n) || !Number.isSafeInteger(n)) throw new Error(`${name} is not a safe integer`);
+      return n;
+    }
+
+    function shorHasHardwareAuth() {
+      return Boolean(AUTH.bearer || window.SYNQC_API_KEY);
+    }
+
+    function setShorBusy(isBusy) {
+      if (!shorPanel) return;
+      shorPanel.querySelectorAll('button, input, select, textarea').forEach((el) => {
+        el.disabled = isBusy;
+      });
+    }
+
+    function shorLog(obj) {
+      if (!shorOutput) return;
+      try {
+        shorOutput.textContent = JSON.stringify(obj, null, 2);
+      } catch (e) {
+        shorOutput.textContent = String(obj);
+      }
+      shorOutput.scrollTop = 0;
+    }
+
+    function applyShorGuardrailsFromHealth(health) {
+      const guardrails = health?.limits?.guardrails;
+      const maxBits = Number.isFinite(health?.limits?.max_n_bits) ? Number(health.limits.max_n_bits) : null;
+      if (!guardrails && !maxBits) return;
+
+      const merged = { ...SHOR_N_LIMITS };
+      if (guardrails && typeof guardrails === 'object') {
+        Object.entries(guardrails).forEach(([mode, info]) => {
+          if (!info || typeof info !== 'object') return;
+          const max = Number(info.max);
+          const label = info.label || merged[mode]?.label || `${mode} guardrail`;
+          if (Number.isFinite(max)) {
+            merged[mode] = { max, label };
+          } else if (merged[mode]) {
+            merged[mode] = { ...merged[mode], label };
+          } else {
+            merged[mode] = { label };
+          }
+        });
+      }
+
+      const capFromBits = Number.isFinite(maxBits) ? (1 << maxBits) - 1 : null;
+      if (Number.isFinite(capFromBits)) {
+        Object.entries(merged).forEach(([mode, info]) => {
+          const max = Number(info?.max);
+          if (Number.isFinite(max)) {
+            merged[mode] = { ...info, max: Math.min(max, capFromBits) };
+          }
+        });
+      }
+
+      SHOR_N_LIMITS = merged;
+      updateShorLimitNote();
+    }
+
+    function shorLimitForMode(mode, method) {
+      if (method === 'classical') return SHOR_N_LIMITS.classical;
+      return SHOR_N_LIMITS[mode] || SHOR_N_LIMITS.auto;
+    }
+
+    function enforceShorLimit(N, opts = {}) {
+      const { backend_mode, method } = opts;
+      const limit = shorLimitForMode(backend_mode, method);
+      if (limit?.max && Math.abs(N) > limit.max) {
+        throw new Error(`N exceeds ${limit.label}. Current N=${Number(N).toLocaleString()}.`);
+      }
+    }
+
+    function updateShorLimitNote() {
+      if (!shorLimitNote) return;
+      const mode = shorBackendSelect?.value || 'auto';
+      const method = shorMethodSelect?.value || 'auto';
+      const limit = shorLimitForMode(mode, method);
+      const classicalLabel = SHOR_N_LIMITS.classical?.label || 'classical guardrail';
+      const label = limit?.label || 'quantum guardrail';
+      const suffix = method === 'classical' ? '' : `; classical path ${classicalLabel}`;
+      shorLimitNote.textContent = `Guardrails: ${label}${suffix}.`;
+    }
+
+    function updateShorBackendFields() {
+      if (!shorBackendSelect) return;
+      const mode = shorBackendSelect.value;
+      const showIbm = mode === 'ibm';
+      const showCustom = mode === 'custom';
+      const hasAuth = shorHasHardwareAuth();
+
+      [shorIbmLabel, shorIbmBackend].forEach((el) => { if (el) el.style.display = showIbm ? '' : 'none'; });
+      [shorProviderLoaderLabel, shorProviderLoader, shorProviderBackendLabel, shorProviderBackend].forEach((el) => {
+        if (el) el.style.display = showCustom ? '' : 'none';
+      });
+
+      if (shorBackendChip) {
+        if (mode === 'aer') {
+          shorBackendChip.textContent = 'Backend: aer (local simulator)';
+          shorBackendChip.dataset.state = '';
+        } else if (mode === 'ibm') {
+          shorBackendChip.textContent = hasAuth
+            ? `Backend: IBM Runtime${shorIbmBackend?.value ? ` (${shorIbmBackend.value})` : ''}`
+            : 'Backend: IBM Runtime (token required)';
+          shorBackendChip.dataset.state = hasAuth ? '' : 'warn';
+        } else {
+          shorBackendChip.textContent = hasAuth
+            ? `Backend: custom provider${shorProviderBackend?.value ? ` (${shorProviderBackend.value})` : ''}`
+            : 'Backend: custom provider (token required)';
+          shorBackendChip.dataset.state = hasAuth ? 'warn' : 'bad';
+        }
+      }
+
+      updateShorLimitNote();
+    }
+
+    function collectShorBackendOptions() {
+      const backend_mode = shorBackendSelect?.value || 'aer';
+      const shots = shorParseIntField(shorShotsInput?.value, 'shots') ?? 1024;
+      const ibm_backend_name = (shorIbmBackend?.value || '').trim() || null;
+      const provider_loader = (shorProviderLoader?.value || '').trim() || null;
+      const provider_backend_name = (shorProviderBackend?.value || '').trim() || null;
+
+      if ((backend_mode === 'ibm' || backend_mode === 'custom') && !shorHasHardwareAuth()) {
+        throw new Error('Hardware modes require a bearer token (synqc_bearer_token/api_key).');
+      }
+      if (backend_mode === 'custom' && !provider_backend_name) {
+        throw new Error('Provide a provider backend name for custom mode.');
+      }
+
+      return { backend_mode, shots, ibm_backend_name, provider_loader, provider_backend_name };
+    }
+
+    function renderShorRuns(runs) {
+      if (!shorRuns) return;
+      shorRuns.innerHTML = '';
+      if (!Array.isArray(runs) || runs.length === 0) {
+        const hint = document.createElement('div');
+        hint.className = 'shor-help';
+        hint.textContent = 'No Shor runs recorded yet.';
+        shorRuns.appendChild(hint);
+        return;
+      }
+
+      runs.forEach((r) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `shor-run ${r.ok === false ? 'shor-run--bad' : ''}`;
+        const ts = r.ts_utc || r.created_at || '';
+        btn.innerHTML = `
+          <div class="shor-run__top">
+            <span>${r.kind || 'run'}</span>
+            <span>${String(ts).split('T')[1] || ts || ''}</span>
+          </div>
+          <div class="shor-run__bot">
+            <span class="shor-run__status">${r.ok === false ? 'fail' : 'ok'}</span>
+            <span>${Math.round(r.runtime_ms || 0)} ms</span>
+          </div>`;
+        btn.addEventListener('click', () => openShorRun(r.run_id || r.id));
+        shorRuns.appendChild(btn);
+      });
+    }
+
+    async function refreshShorRuns() {
+      if (!shorRunStatus) return;
+      shorRunStatus.textContent = 'Loading runs from /shor/runs…';
+      try {
+        const data = await apiGet('/shor/runs?limit=12');
+        shorRunsCache = data?.runs || [];
+        renderShorRuns(shorRunsCache);
+        renderExperimentsTable();
+        shorRunStatus.textContent = `Runs loaded (${shorRunsCache.length || 0}).`;
+      } catch (err) {
+        shorRunStatus.textContent = 'Runs unavailable (/shor/runs).';
+        shorLog({ error: err.message });
+      }
+    }
+
+    async function openShorRun(runId) {
+      if (!runId) return;
+      shorRunStatus.textContent = `Loading run ${runId}…`;
+      try {
+        const data = await apiGet(`/shor/runs/${encodeURIComponent(runId)}`);
+        shorRunStatus.textContent = `Run ${runId} loaded.`;
+        shorLog({ action: 'run_detail', ...data });
+      } catch (err) {
+        shorRunStatus.textContent = `Run ${runId} unavailable.`;
+        shorLog({ error: err.message });
+      }
+    }
+
+    async function refreshShorHealth() {
+      if (!shorStatus) return;
+      shorStatus.textContent = 'Checking /shor/health…';
+      try {
+        const h = await apiGet('/shor/health');
+        shorHealthCache = h;
+        shorStatus.innerHTML = `<strong>Backend OK</strong> (${h.feature || 'shor_rsa_demo'})`;
+        if (shorBackendChip) shorBackendChip.dataset.state = '';
+        applyShorGuardrailsFromHealth(h);
+        updateShorBackendFields();
+      } catch (err) {
+        shorStatus.textContent = 'Backend unavailable (/shor/health).';
+        if (shorBackendChip) shorBackendChip.dataset.state = 'bad';
+        shorLog({ error: err.message });
+      }
+    }
+
+    async function shorGenerate() {
+      setShorBusy(true);
+      try {
+        const bits = shorParseIntField(shorPrimeBits?.value, 'Prime bits') ?? 12;
+        const e = shorParseIntField(shorExponent?.value, 'e') ?? 65537;
+        const data = await apiPost('/shor/rsa/generate', { bits, e });
+        if (shorModulus) shorModulus.value = String(data.N);
+        if (shorExponent) shorExponent.value = String(data.e);
+        shorRunStatus.textContent = 'Generated demo RSA key.';
+        shorLog({ action: 'rsa_generate', ...data });
+        refreshShorRuns();
+      } catch (err) {
+        shorRunStatus.textContent = err.message;
+        shorLog({ error: err.message });
+      } finally {
+        setShorBusy(false);
+      }
+    }
+
+    async function shorEncrypt() {
+      setShorBusy(true);
+      try {
+        const N = shorParseIntField(shorModulus?.value, 'N');
+        const e = shorParseIntField(shorExponent?.value, 'e');
+        if (N === null || e === null) throw new Error('Provide N and e.');
+        const plaintext_int = shorParseIntField(shorPlainInt?.value, 'plaintext_int');
+        const plaintext_text = (shorPlainText?.value || '').trim();
+        const body = { N, e };
+        if (plaintext_int !== null) body.plaintext_int = plaintext_int;
+        else if (plaintext_text) body.plaintext_text = plaintext_text;
+        else throw new Error('Provide plaintext_int or plaintext_text.');
+        const data = await apiPost('/shor/rsa/encrypt', body);
+        if (shorCiphertext) shorCiphertext.value = String(data.ciphertext_int);
+        shorRunStatus.textContent = 'Encrypted payload.';
+        shorLog({ action: 'rsa_encrypt', ...data });
+        refreshShorRuns();
+      } catch (err) {
+        shorRunStatus.textContent = err.message;
+        shorLog({ error: err.message });
+      } finally {
+        setShorBusy(false);
+      }
+    }
+
+    async function shorDecrypt() {
+      setShorBusy(true);
+      try {
+        const N = shorParseIntField(shorModulus?.value, 'N');
+        const e = shorParseIntField(shorExponent?.value, 'e');
+        const ciphertext_int = shorParseIntField(shorCiphertext?.value, 'ciphertext_int');
+        if (N === null || e === null || ciphertext_int === null) throw new Error('Provide N, e, and ciphertext.');
+        const opts = collectShorBackendOptions();
+        const method = shorMethodSelect?.value || 'auto';
+        enforceShorLimit(N, { backend_mode: opts.backend_mode, method });
+        const data = await apiPost('/shor/rsa/decrypt', { N, e, ciphertext_int, method, ...opts });
+        shorRunStatus.textContent = `Decrypt complete (${data.method_used || method}).`;
+        shorLog({ action: 'rsa_decrypt', ...data });
+        refreshShorRuns();
+      } catch (err) {
+        shorRunStatus.textContent = err.message;
+        shorLog({ error: err.message });
+      } finally {
+        setShorBusy(false);
+      }
+    }
+
+    async function shorFactor() {
+      setShorBusy(true);
+      try {
+        const N = shorParseIntField(shorModulus?.value, 'N');
+        if (N === null) throw new Error('Provide N to factor.');
+        const opts = collectShorBackendOptions();
+        const method = shorMethodSelect?.value || 'auto';
+        enforceShorLimit(N, { backend_mode: opts.backend_mode, method });
+        const data = await apiPost('/shor/factor', { N, method, ...opts });
+        shorRunStatus.textContent = `Factorization dispatched (${data.method_used || method}).`;
+        shorLog({ action: 'factor', ...data });
+        refreshShorRuns();
+      } catch (err) {
+        shorRunStatus.textContent = err.message;
+        shorLog({ error: err.message });
+      } finally {
+        setShorBusy(false);
+      }
+    }
+
+    async function shorEstimate() {
+      setShorBusy(true);
+      try {
+        const N = shorParseIntField(shorModulus?.value, 'N');
+        if (N === null) throw new Error('Provide N to estimate.');
+        const backend_mode = shorBackendSelect?.value || 'auto';
+        const method = shorMethodSelect?.value || 'auto';
+        enforceShorLimit(N, { backend_mode, method });
+        const data = await apiPost('/shor/estimate', { N });
+        shorRunStatus.textContent = 'Resource estimate ready.';
+        shorLog({ action: 'estimate', ...data });
+      } catch (err) {
+        shorRunStatus.textContent = err.message;
+        shorLog({ error: err.message });
+      } finally {
+        setShorBusy(false);
+      }
+    }
+
+    function initShorPanel() {
+      if (!shorPanel) return;
+      updateShorBackendFields();
+      refreshShorHealth();
+      refreshShorRuns();
+
+      [shorBackendSelect, shorIbmBackend, shorProviderLoader, shorProviderBackend, shorMethodSelect].forEach((el) => {
+        if (el) el.addEventListener('input', updateShorBackendFields);
+        if (el) el.addEventListener('change', updateShorBackendFields);
+      });
+
+      if (shorHealthBtn) shorHealthBtn.addEventListener('click', refreshShorHealth);
+      if (shorReloadRunsBtn) shorReloadRunsBtn.addEventListener('click', refreshShorRuns);
+      if (shorOpenLatestBtn) shorOpenLatestBtn.addEventListener('click', () => {
+        const latest = shorRunsCache?.[0];
+        if (latest) openShorRun(latest.run_id || latest.id);
+      });
+      if (shorGenerateBtn) shorGenerateBtn.addEventListener('click', shorGenerate);
+      if (shorEncryptBtn) shorEncryptBtn.addEventListener('click', shorEncrypt);
+      if (shorDecryptBtn) shorDecryptBtn.addEventListener('click', shorDecrypt);
+      if (shorFactorBtn) shorFactorBtn.addEventListener('click', shorFactor);
+      if (shorEstimateBtn) shorEstimateBtn.addEventListener('click', shorEstimate);
+    }
+
     function fmtTimeFromEpochSeconds(epochSec) {
+      if (!Number.isFinite(epochSec)) return '—';
       const d = new Date(epochSec * 1000);
+      if (Number.isNaN(d.getTime())) return '—';
       return d.toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
     }
 
@@ -2054,6 +2610,7 @@
       if (preset === 'backend_compare') return 'Backend compare';
       if (preset === 'grover_demo') return 'Grover energy search';
       if (preset === 'dpd_demo') return 'DPD demo';
+      if (preset === 'shor') return 'Shor factoring';
       return preset;
     }
 
@@ -2121,6 +2678,7 @@
 
     function summarizeControlProfile(profile) {
       if (!profile) return '—';
+      if (profile.shor) return profile.shor;
       const drive = Number(profile.drive_bias ?? 1).toFixed(2);
       const gain = Number(profile.feedback_gain ?? 0).toFixed(2);
       const clamp = `${Number(profile.safety_clamp_ns ?? 0).toLocaleString()} ns`;
@@ -2777,6 +3335,49 @@
       }
     }
 
+    function normalizeShorRunForTable(run) {
+      if (!run) return null;
+      const idBase = run.run_id || run.id || run.uuid || null;
+      const backend = run.provider_backend_name || run.backend_name || run.backend_mode || run.backend || 'shor';
+      const method = run.method_used || run.method || run.kind || 'shor';
+      const modulus = run.N ?? run.n ?? run.modulus;
+      const runtime_us = Number.isFinite(run.runtime_ms) ? Number(run.runtime_ms) * 1000 : null;
+      const status = run.ok === false ? 'fail' : (run.status || 'ok');
+      let created_at = null;
+      if (Number.isFinite(run.created_at)) {
+        created_at = run.created_at > 1e12 ? Math.round(run.created_at / 1000) : run.created_at;
+      } else {
+        const parsed = Date.parse(run.ts_utc || run.created_at || '');
+        if (Number.isFinite(parsed)) created_at = Math.round(parsed / 1000);
+      }
+      if (!Number.isFinite(created_at)) created_at = Math.round(Date.now() / 1000);
+
+      const display_id = idBase ? String(idBase).split('-')[0] : 'shor';
+      const control_profile = {
+        shor: `${method} · ${backend}${modulus ? ` · N=${modulus}` : ''}`,
+      };
+
+      return {
+        id: idBase ? `shor-${idBase}` : `shor-${created_at}`,
+        _shorRunId: idBase || created_at,
+        display_id,
+        preset: 'shor',
+        hardware_target: backend,
+        created_at,
+        kpis: { fidelity: null, latency_us: runtime_us, status },
+        control_profile,
+        error_code: status === 'fail' ? (run.error_code || 'shor_fail') : '',
+        error_message: run.error_message,
+        action_hint: run.action_hint,
+      };
+    }
+
+    function experimentRunsWithShor() {
+      const shorRuns = (shorRunsCache || []).map(normalizeShorRunForTable).filter(Boolean);
+      const merged = [...recentRunsCache, ...shorRuns];
+      return merged.sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
+    }
+
     // --------------------------------------------
     // Table rendering + filtering
     // --------------------------------------------
@@ -2792,6 +3393,7 @@
           (filter === 'compare' && p === 'backend_compare') ||
           (filter === 'grover' && p === 'grover_demo') ||
           (filter === 'dpd' && (p === 'dpd_demo' || p === 'hello_quantum_sim')) ||
+          (filter === 'shor' && p === 'shor') ||
           (filter === 'failing' && failing);
         row.style.display = show ? '' : 'none';
       });
@@ -2850,14 +3452,16 @@
     function updateRunRow(tr, run, includeId) {
       const cells = tr._cells;
       tr.dataset.preset = run.preset;
-      tr.dataset.id = run.id;
+      tr.dataset.id = run.id || run._shorRunId;
       tr.dataset.failing = ((run.error_code || '') !== '' || (run.kpis?.status === 'fail')) ? '1' : '0';
+
+      const isShorRow = run.preset === 'shor' && Boolean(run._shorRunId);
 
       cells.tdTime.textContent = fmtTimeFromEpochSeconds(run.created_at);
 
       if (includeId) {
-        const shortId = (run.id || '').split('-')[0] || run.id;
-        cells.tdId.textContent = shortId;
+        const shortId = run.display_id || (run.id || '').split('-')[0] || run.id || run._shorRunId;
+        cells.tdId.textContent = shortId || '—';
       }
 
       cells.tdPreset.textContent = presetLabel(run.preset);
@@ -2873,7 +3477,10 @@
       cells.pill.className = `status-pill ${statusClass(run.kpis?.status)}`;
       cells.pill.textContent = statusLabel(run.kpis?.status);
 
-      tr.onclick = () => openDetails(run.id);
+      tr.onclick = () => {
+        if (isShorRow) return openShorRun(run._shorRunId);
+        return openDetails(run.id);
+      };
       tr.style.display = '';
     }
 
@@ -3047,7 +3654,8 @@
     }
 
     function renderExperimentsTable() {
-      renderRunTable(experimentsBody, recentRunsCache, {
+      const mergedRuns = experimentRunsWithShor();
+      renderRunTable(experimentsBody, mergedRuns, {
         includeId: true,
         pool: experimentsRowPool,
         emptyMessage: 'No runs loaded.',
@@ -3364,6 +3972,7 @@
     // --------------------------------------------
     primeWorkflowFromRun(lastRun);
     startQubitDemo();
+    initShorPanel();
     refreshFromBackend();
     updateInterpretationText();
   </script>
