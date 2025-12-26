@@ -4,6 +4,7 @@ import importlib
 
 import pytest
 
+from synqc_backend import grover_utils
 from synqc_backend.models import ExperimentPreset
 from synqc_backend.provider_clients import ProviderClientError, ProviderLiveResult, load_provider_clients
 from synqc_backend.qiskit_provider import QiskitProviderClient
@@ -110,15 +111,25 @@ def test_grover_provider_path_uses_budget(monkeypatch):
     monkeypatch.setattr(QiskitProviderClient, "_ensure_qiskit_available", lambda self, use_runtime: None)
     monkeypatch.setattr(QiskitProviderClient, "_runtime_configured", lambda self: False)
     monkeypatch.setattr(QiskitProviderClient, "_resolve_backend", lambda self, use_runtime: object())
-    monkeypatch.setattr("synqc_backend.qiskit_provider.build_grover_circuit", lambda cfg: {"shots": cfg.shots})
+    monkeypatch.setattr(grover_utils, "_require_qiskit", lambda use_runtime: None)
+    monkeypatch.setattr(grover_utils, "build_grover_circuit", lambda cfg: {"shots": cfg.shots})
 
     executed_shots = []
 
     def _fake_execute(self, backend, circuit, shots: int, *, use_runtime: bool):
         executed_shots.append(shots)
         if shots < 40:
-            return {"00000": shots}
-        return {"10101": shots // 2, "01010": shots // 2}
+            counts = {"11": shots // 2, "00": shots - (shots // 2)}
+        else:
+            counts = {"11": shots * 9 // 10, "00": shots - (shots * 9 // 10)}
+        return ProviderLiveResult(
+            raw_counts=counts,
+            expected_distribution=None,
+            shots_used=shots,
+            fidelity=grover_utils.success_probability(counts=counts, marked={"11"}),
+            latency_us=None,
+            backaction=None,
+        )
 
     monkeypatch.setattr(QiskitProviderClient, "_execute", _fake_execute, raising=False)
 
@@ -128,7 +139,7 @@ def test_grover_provider_path_uses_budget(monkeypatch):
     assert result.fidelity is not None
     assert result.shots_used <= 64
     assert executed_shots[0] >= 16
-    assert executed_shots[-1] == result.shots_used
+    assert sum(executed_shots) == result.shots_used
 
 
 def test_grover_provider_path_scales_with_fidelity(monkeypatch):
@@ -137,7 +148,8 @@ def test_grover_provider_path_scales_with_fidelity(monkeypatch):
     monkeypatch.setattr(QiskitProviderClient, "_ensure_qiskit_available", lambda self, use_runtime: None)
     monkeypatch.setattr(QiskitProviderClient, "_runtime_configured", lambda self: False)
     monkeypatch.setattr(QiskitProviderClient, "_resolve_backend", lambda self, use_runtime: object())
-    monkeypatch.setattr("synqc_backend.qiskit_provider.build_grover_circuit", lambda cfg: {"shots": cfg.shots})
+    monkeypatch.setattr(grover_utils, "_require_qiskit", lambda use_runtime: None)
+    monkeypatch.setattr(grover_utils, "build_grover_circuit", lambda cfg: {"shots": cfg.shots})
 
     fidelities = iter([0.55, 0.92])
     monkeypatch.setattr(
@@ -147,10 +159,20 @@ def test_grover_provider_path_scales_with_fidelity(monkeypatch):
 
     executed_shots: list[int] = []
 
+    success_levels = iter([0.55, 0.92, 0.97])
+
     def _fake_execute(self, backend, circuit, shots: int, *, use_runtime: bool):
         executed_shots.append(shots)
-        # Always report decent marked-state success so fidelity drives scaling decisions.
-        return {"10101": shots * 3 // 5, "01010": shots * 1 // 5, "11111": shots // 5}
+        success = next(success_levels, 0.97)
+        counts = {"11": int(shots * success), "00": shots - int(shots * success)}
+        return ProviderLiveResult(
+            raw_counts=counts,
+            expected_distribution=None,
+            shots_used=shots,
+            fidelity=success,
+            latency_us=None,
+            backaction=None,
+        )
 
     monkeypatch.setattr(QiskitProviderClient, "_execute", _fake_execute, raising=False)
 
@@ -160,5 +182,5 @@ def test_grover_provider_path_scales_with_fidelity(monkeypatch):
     assert result.shots_used <= 400
     # With low initial fidelity we expect at least two iterations before exiting.
     assert len(executed_shots) >= 2
-    assert executed_shots[-1] == result.shots_used
+    assert sum(executed_shots) == result.shots_used
     assert result.fidelity is not None and result.fidelity >= 0.9

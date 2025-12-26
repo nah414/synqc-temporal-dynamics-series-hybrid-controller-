@@ -49,13 +49,72 @@ This package provides:
   wheels (core runtime + Qiskit + Braket + IonQ extras), reducing proxy friction
   and keeping installs repeatable. If you update dependencies, rebuild the wheel
   cache (`pip wheel -r backend/requirements.lock`) or regenerate the lock list to
-  keep the image and automation consistent.
+  keep the image and automation consistent. You can also pre-stage Qiskit wheels
+  into `backend/synqc_backend/vendor/qiskit_wheels/` (or any directory set via
+  `QISKIT_WHEEL_DIR`) so editable installs succeed even when the package index is
+  blocked. CI can prebuild and publish this cache as a tarball with
+  `backend/scripts/build_qiskit_cache.sh` so air-gapped hosts just download and
+  extract the artifact instead of rebuilding wheels locally. The scheduled
+  workflow in `.github/workflows/qiskit-cache.yml` also uploads the tarball to a
+  GitHub Release (`qiskit-cache-latest`), mirrors it to GitHub Packages (with a
+  `latest` alias for stable downloads), and prunes older package versions so the
+  registry stays lean without losing recent caches. Retention defaults to 5
+  package versions but can be overridden per-run (`workflow_dispatch` input
+  `keep_versions`) or centrally with the repo variable/secret
+  `QISKIT_CACHE_KEEP_VERSIONS`.
 
 ```bash
 python3.12 -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install wheel
-./scripts/dev_install.sh  # uses PIP_NO_BUILD_ISOLATION=1 under the hood
+# Optional: cache Qiskit wheels behind a proxy-friendly directory first.
+# mkdir -p backend/synqc_backend/vendor/qiskit_wheels
+# pip wheel -r backend/requirements.lock -w backend/synqc_backend/vendor/qiskit_wheels
+QISKIT_WHEEL_DIR=${QISKIT_WHEEL_DIR:-backend/synqc_backend/vendor/qiskit_wheels} \
+  ./scripts/dev_install.sh  # uses PIP_NO_BUILD_ISOLATION=1 under the hood
+```
+
+To publish a cache artifact from CI (GitHub Actions example), you can either use
+the dedicated workflow at `.github/workflows/qiskit-cache.yml` (scheduled weekly
+and on any `backend/requirements.lock` change) or embed equivalent steps in
+another workflow:
+
+```yaml
+- name: Build Qiskit cache
+  run: |
+    cd backend
+    ./scripts/build_qiskit_cache.sh
+
+- name: Upload Qiskit cache artifact
+  uses: actions/upload-artifact@v4
+  with:
+    name: qiskit-wheels
+    path: backend/synqc_backend/vendor/qiskit_wheels.tar.gz
+```
+
+The scheduled workflow additionally uploads `backend/synqc_backend/vendor/qiskit_wheels.tar.gz`
+to a release tagged `qiskit-cache-latest` for easy consumption outside CI,
+publishes a `latest` alias in GitHub Packages, and mirrors the versioned tarball
+to the same registry so it persists even if releases are pruned. Older package
+versions are automatically trimmed (default: keep 5, overridable via
+`keep_versions` input or `QISKIT_CACHE_KEEP_VERSIONS` repo variable/secret) to
+avoid unbounded growth while retaining a few recent caches. To consume the cache
+locally:
+
+```bash
+# Option A: via GitHub CLI
+gh release download qiskit-cache-latest -p 'qiskit_wheels.tar.gz' -D backend/synqc_backend/vendor
+tar -xzf backend/synqc_backend/vendor/qiskit_wheels.tar.gz -C backend/synqc_backend/vendor
+
+# Option B: download from the Releases page (asset name: qiskit_wheels.tar.gz)
+
+# Option C: from the GitHub Packages mirror (requires a GH token with packages:read)
+GH_TOKEN=... GH_OWNER=${GH_OWNER:-$(gh repo view --json owner --jq .owner.login)}
+PKG_ENDPOINT="/repos/${GH_OWNER}/$(basename $(git rev-parse --show-toplevel))/packages/generic/qiskit-wheel-cache"
+LATEST_ID=$(gh api -H "Accept: application/vnd.github+json" "${PKG_ENDPOINT}/versions?per_page=1" --jq '.[0].id')
+DOWNLOAD_URL=$(gh api -H "Accept: application/vnd.github+json" "${PKG_ENDPOINT}/versions/${LATEST_ID}" --jq '.package_files[0].download_url')
+curl -L -H "Authorization: Bearer ${GH_TOKEN}" -o backend/synqc_backend/vendor/qiskit_wheels.tar.gz "${DOWNLOAD_URL}"
+tar -xzf backend/synqc_backend/vendor/qiskit_wheels.tar.gz -C backend/synqc_backend/vendor
 ```
 
 Or install just the runtime deps:
@@ -66,12 +125,14 @@ pip install fastapi uvicorn[standard] pydantic numpy redis prometheus-client
 
 For the optional load-test helper, install the `dev` extra to pull in `httpx`
 and `wheel` (the latter ensures `bdist_wheel` is available during editable
-installs even when your network blocks package indexes):
+installs even when your network blocks package indexes). To keep Grover and
+Qiskit-backed integration tests running in CI, the helper script also installs
+the `qiskit` extra by default:
 
 ```bash
-pip install -e .[dev]
+pip install -e .[dev,qiskit]
 # If your proxy blocks build isolation downloads, prefer the helper script:
-# ./scripts/dev_install.sh
+# ./scripts/dev_install.sh (installs dev + qiskit extras)
 ```
 
 ---
@@ -136,6 +197,24 @@ python -m synqc_backend.redis_healthcheck
 ```
 
 The script exits with a non-zero status if ping or publish fails, making it easy to wire into CI checks or local troubleshooting even when Docker isn't present.
+
+---
+
+## Testing
+
+The Grover presets and Qiskit provider paths expect the `qiskit` extras to be
+installed so runtime- and simulator-backed tests run instead of being skipped.
+Install dependencies via the helper script or the locked requirements file to
+ensure the full suite executes:
+
+```bash
+# From repo root
+./backend/scripts/dev_install.sh
+# or
+pip install -r backend/requirements.lock
+
+PYTHONPATH=backend pytest backend/tests -q
+```
 
 ---
 
