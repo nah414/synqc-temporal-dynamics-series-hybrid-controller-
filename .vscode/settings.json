@@ -1,0 +1,4 @@
+{
+    "editor.defaultFormatter": "GitHub.copilot-chat",
+    "notebook.defaultFormatter": "docker.docker"
+}
