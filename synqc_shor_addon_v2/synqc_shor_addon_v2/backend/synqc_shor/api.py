@@ -22,6 +22,7 @@ from .config import (
     SYNQC_SHOR_DEFAULT_E,
     SYNQC_SHOR_DEFAULT_KEY_BITS,
     SYNQC_SHOR_INCLUDE_STEPS,
+    SYNQC_SHOR_MAX_N_BITS,
 )
 from .estimate import estimate_shor_resources
 from .factor import factor_N
@@ -35,6 +36,7 @@ from .rsa import (
 )
 
 from .run_store import record_run, list_runs, get_run
+from .qiskit_shor import is_qiskit_available
 
 
 router = APIRouter()
@@ -163,13 +165,46 @@ def _bad_request(msg: str):
 
 
 # ----------------------------
+# Helpers
+# ----------------------------
+
+def _default_guardrails() -> Dict[str, Any]:
+    """Server-advertised guardrails for the UI to mirror."""
+
+    guardrails: Dict[str, Dict[str, Any]] = {
+        "auto": {"max": 32000, "label": "auto/aer guardrail ~32,000"},
+        "aer": {"max": 32000, "label": "auto/aer guardrail ~32,000"},
+        "ibm": {"max": 4096, "label": "IBM Runtime guardrail ~4,096"},
+        "custom": {"max": 4096, "label": "custom provider guardrail ~4,096"},
+        "classical": {"max": 5_000_000, "label": "classical guardrail ~5,000,000"},
+    }
+
+    if SYNQC_SHOR_MAX_N_BITS > 0:
+        max_n_cap = (1 << SYNQC_SHOR_MAX_N_BITS) - 1
+        for v in guardrails.values():
+            if isinstance(v.get("max"), (int, float)):
+                v["max"] = min(int(v["max"]), max_n_cap)
+
+    return guardrails
+
+
+# ----------------------------
 # Routes
 # ----------------------------
 
 @router.get("/health")
 def shor_health():
     _ensure_enabled()
-    return {"ok": True, "feature": "shor_rsa_demo"}
+    guardrails = _default_guardrails()
+    return {
+        "ok": True,
+        "feature": "shor_rsa_demo",
+        "qiskit_available": is_qiskit_available(),
+        "limits": {
+            "max_n_bits": SYNQC_SHOR_MAX_N_BITS,
+            "guardrails": guardrails,
+        },
+    }
 
 
 @router.post("/factor", response_model=FactorResponse)
