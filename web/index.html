@@ -72,6 +72,10 @@
       80% { opacity: 0.4; }
       100%{ transform: translate3d(-20px,-120px,0) scale(0.9); opacity: 0; }
     }
+    @keyframes pulseDot {
+      0%, 100% { opacity: 0.45; }
+      50% { opacity: 1; }
+    }
     header {
       position: sticky;
       top: 0;
@@ -1055,13 +1059,9 @@
       box-shadow: 0 18px 38px rgba(0,0,0,0.4);
       grid-column: 1 / -1;
       width: 100%;
-      max-height: 50vh;
       min-height: 320px;
       overflow: auto;
     }
-    @media (max-width: 1280px) { .panel-shor { max-height: 56vh; } }
-    @media (max-width: 980px) { .panel-shor { max-height: 62vh; } }
-    @media (max-width: 720px) { .panel-shor { max-height: 70vh; } }
     .shor-meta { display: flex; gap: 0.35rem; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
     .shor-chip {
       display: inline-flex;
@@ -1086,8 +1086,25 @@
     .shor-chip[data-state="bad"] { border-color: #ff4d6a; color: #ffd1d9; }
     .shor-status { font-size: 0.78rem; color: var(--text-soft); }
     .shor-status strong { color: var(--text-main); }
-    .shor-layout { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.9fr); gap: 0.8rem; }
-    @media (max-width: 1100px) { .shor-layout { grid-template-columns: minmax(0, 1fr); } }
+    .shor-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.3fr) minmax(0, 0.9fr);
+      grid-template-rows: minmax(0, 1fr) minmax(0, 0.9fr);
+      grid-template-areas:
+        "controls telemetry"
+        "controls workspace";
+      gap: 0.8rem;
+      align-items: stretch;
+    }
+    @media (max-width: 1100px) {
+      .shor-layout {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-areas:
+          "controls"
+          "telemetry"
+          "workspace";
+      }
+    }
     .shor-card {
       border-radius: 14px;
       border: 1px solid var(--border-subtle);
@@ -1098,6 +1115,48 @@
       gap: 0.6rem;
     }
     .shor-card h3 { margin: 0; font-size: 0.95rem; letter-spacing: 0.02em; }
+    .shor-card-control { grid-area: controls; }
+    .shor-card-output { grid-area: telemetry; }
+    .shor-workspace { grid-area: workspace; gap: 0.5rem; position: relative; min-height: 260px; }
+    .shor-workspace::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: 14px;
+      pointer-events: none;
+      background: radial-gradient(circle at 75% 85%, rgba(106,229,255,0.12), transparent 40%);
+      opacity: 0.8;
+    }
+    .shor-workspace h3 { display: flex; align-items: center; gap: 0.35rem; }
+    .shor-workspace h3 .chip {
+      font-size: 0.7rem;
+      padding: 0.15rem 0.5rem;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-soft);
+      letter-spacing: 0.05em;
+    }
+    .shor-workspace .panel-sub { margin-top: -0.2rem; }
+    .workspace-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.45rem; position: relative; z-index: 1; }
+    .workspace-tile {
+      border-radius: 10px;
+      border: 1px solid var(--border-subtle);
+      background: rgba(255,255,255,0.03);
+      padding: 0.45rem 0.55rem;
+      display: grid;
+      gap: 0.25rem;
+    }
+    .workspace-label { font-size: 0.72rem; color: var(--text-soft); letter-spacing: 0.01em; }
+    .workspace-value { font-size: 0.9rem; font-weight: 600; color: var(--text-main); word-break: break-word; }
+    .workspace-note { width: 100%; position: relative; z-index: 1; }
+    .workspace-note .shor-textarea { min-height: 110px; }
+    .workspace-status { font-size: 0.75rem; color: var(--text-soft); display: flex; align-items: center; gap: 0.35rem; position: relative; z-index: 1; }
+    .workspace-status::before { content: "●"; color: #6ae5ff; font-size: 0.65rem; transition: color 0.2s ease, opacity 0.2s ease; }
+    .workspace-status[data-state="queued"]::before { color: var(--kpi-warn); animation: pulseDot 1.2s ease-in-out infinite; }
+    .workspace-status[data-state="running"]::before { color: var(--accent-strong); animation: pulseDot 1.2s ease-in-out infinite; }
+    .workspace-status[data-state="fail"]::before { color: var(--kpi-bad); animation: none; }
+    .workspace-status[data-state="ok"]::before { color: var(--kpi-good); animation: none; }
     .shor-grid-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.55rem; }
     .shor-grid-fields label { font-size: 0.75rem; color: var(--text-soft); }
     .shor-input, .shor-select, .shor-textarea {
@@ -1532,7 +1591,7 @@
           </div>
         </div>
         <div class="shor-layout">
-          <div class="shor-card">
+          <div class="shor-card shor-card-control">
             <h3>Quantum control surface</h3>
             <div class="shor-callout">
               Use the controls below to generate guard-railed RSA keys, encrypt payloads, and drive Shor factoring/decryption against the backend. Hardware modes require your bearer token; the panel falls back to classical factoring when quantum hardware is unavailable.
@@ -1611,6 +1670,40 @@
               <button class="shor-btn" id="shorReloadRunsBtn" type="button">Reload runs</button>
               <button class="shor-btn" id="shorOpenLatestBtn" type="button">Open latest</button>
             </div>
+          </div>
+          <div class="shor-card shor-workspace">
+            <h3>Workspace <span class="chip">live mirror</span></h3>
+            <div class="panel-sub">Use this scratchpad to stage inputs from your plugged-in system and watch Shor settings update in real time.</div>
+            <div class="workspace-note">
+              <textarea class="shor-textarea" id="shorWorkspaceNotes" placeholder="Commands, notes, or intermediate ciphertexts…"></textarea>
+            </div>
+            <div class="workspace-grid" aria-live="polite">
+              <div class="workspace-tile">
+                <div class="workspace-label">Modulus (N)</div>
+                <div class="workspace-value" id="shorWorkspaceModulus">—</div>
+              </div>
+              <div class="workspace-tile">
+                <div class="workspace-label">Exponent (e)</div>
+                <div class="workspace-value" id="shorWorkspaceExponent">—</div>
+              </div>
+              <div class="workspace-tile">
+                <div class="workspace-label">Backend / method</div>
+                <div class="workspace-value" id="shorWorkspaceBackend">—</div>
+              </div>
+              <div class="workspace-tile">
+                <div class="workspace-label">Plaintext</div>
+                <div class="workspace-value" id="shorWorkspacePlaintext">—</div>
+              </div>
+              <div class="workspace-tile">
+                <div class="workspace-label">Ciphertext</div>
+                <div class="workspace-value" id="shorWorkspaceCiphertext">—</div>
+              </div>
+              <div class="workspace-tile">
+                <div class="workspace-label">Shots &amp; guardrail</div>
+                <div class="workspace-value" id="shorWorkspaceShots">—</div>
+              </div>
+            </div>
+            <div class="workspace-status" id="shorWorkspaceStatus">Waiting for input…</div>
           </div>
         </div>
       </section>
@@ -1958,6 +2051,14 @@
     const shorDecryptBtn = document.getElementById('shorDecryptBtn');
     const shorEstimateBtn = document.getElementById('shorEstimateBtn');
     const shorFactorBtn = document.getElementById('shorFactorBtn');
+    const shorWorkspaceNotes = document.getElementById('shorWorkspaceNotes');
+    const shorWorkspaceModulus = document.getElementById('shorWorkspaceModulus');
+    const shorWorkspaceExponent = document.getElementById('shorWorkspaceExponent');
+    const shorWorkspaceBackend = document.getElementById('shorWorkspaceBackend');
+    const shorWorkspacePlaintext = document.getElementById('shorWorkspacePlaintext');
+    const shorWorkspaceCiphertext = document.getElementById('shorWorkspaceCiphertext');
+    const shorWorkspaceShots = document.getElementById('shorWorkspaceShots');
+    const shorWorkspaceStatus = document.getElementById('shorWorkspaceStatus');
 
     // --------------------------------------------
     // Backend wiring
@@ -2044,6 +2145,39 @@
       return {};
     }
 
+    function shorAuthQuery() {
+      const params = new URLSearchParams();
+      if (AUTH.bearer) {
+        params.set('bearer', AUTH.bearer.replace(/^Bearer\s+/i, ''));
+      } else if (window.SYNQC_API_KEY) {
+        params.set('api_key', window.SYNQC_API_KEY);
+      }
+      return params.toString();
+    }
+
+    function shorStreamUrl(path) {
+      const base = path.startsWith('http') ? path : `${API_BASE}${path}`;
+      const qs = shorAuthQuery();
+      if (!qs) return base;
+      return `${base}${base.includes('?') ? '&' : '?'}${qs}`;
+    }
+
+    function shorWebSocketUrl(path) {
+      const full = path.startsWith('http') ? path : `${API_BASE}${path}`;
+      try {
+        const url = new URL(full);
+        url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+        const qs = shorAuthQuery();
+        if (qs) {
+          const connector = url.search ? '&' : '?';
+          url.search = `${url.search || ''}${connector}${qs}`;
+        }
+        return url.toString();
+      } catch (_) {
+        return null;
+      }
+    }
+
     if (URL_API_KEYS_ENABLED && urlKeyWarning) {
       urlKeyWarning.style.display = 'block';
     }
@@ -2058,8 +2192,18 @@
 
     let controlProfileCache = null;
 
+    const shorUrlParams = new URLSearchParams(window.location.search);
+    const SHOR_STREAM_PATH = shorUrlParams.get('shor_stream') || '/shor/runs/stream';
+    const SHOR_WS_PATH = shorUrlParams.get('shor_ws') || '/shor/runs/ws';
+
     let shorRunsCache = [];
     let shorHealthCache = null;
+    let shorRunPollTimer = null;
+    let shorRunPollInFlight = false;
+    let shorRunPollPending = false;
+    let shorRunEventSource = null;
+    let shorRunSocket = null;
+    const SHOR_RUN_POLL_INTERVAL_MS = 6000;
     let SHOR_N_LIMITS = {
       auto: { max: 32000, label: 'auto/aer guardrail ~32,000' },
       aer: { max: 32000, label: 'auto/aer guardrail ~32,000' },
@@ -2274,11 +2418,20 @@
       return Boolean(AUTH.bearer || window.SYNQC_API_KEY);
     }
 
+    function setShorWorkspaceStatus(text, state = 'idle') {
+      if (!shorWorkspaceStatus) return;
+      shorWorkspaceStatus.textContent = text;
+      shorWorkspaceStatus.dataset.state = state;
+    }
+
     function setShorBusy(isBusy) {
       if (!shorPanel) return;
+      shorPanel.classList.toggle('shor-busy', isBusy);
       shorPanel.querySelectorAll('button, input, select, textarea').forEach((el) => {
         el.disabled = isBusy;
       });
+      const base = (shorRunStatus?.textContent || '').trim();
+      setShorWorkspaceStatus(isBusy ? base || 'Running Shor request…' : base || 'Ready for input', isBusy ? 'running' : (shorWorkspaceStatus?.dataset.state || 'idle'));
     }
 
     function shorLog(obj) {
@@ -2289,6 +2442,7 @@
         shorOutput.textContent = String(obj);
       }
       shorOutput.scrollTop = 0;
+      updateShorWorkspaceSnapshot();
     }
 
     function applyShorGuardrailsFromHealth(health) {
@@ -2350,6 +2504,57 @@
       shorLimitNote.textContent = `Guardrails: ${label}${suffix}.`;
     }
 
+    function describeShorRunPhase(run) {
+      if (!run) return { text: 'Waiting for input…', state: 'idle' };
+      const statusRaw = (run.status || run.state || run.phase || '').toString().toLowerCase();
+      const phaseRaw = (run.phase || run.stage || '').toString().toLowerCase();
+      const runId = run.run_id || run.id || run.uuid || '';
+      const label = runId ? `Run ${runId}` : 'Latest run';
+      const backend = run.provider_backend_name || run.backend_name || run.backend_mode || run.backend || 'backend';
+      const runtimeMs = Number.isFinite(run.runtime_ms) ? Number(run.runtime_ms) : null;
+
+      const failed = run.ok === false || statusRaw === 'fail' || statusRaw === 'failed' || statusRaw === 'error';
+      if (failed) return { text: `${label} failed on ${backend}.`, state: 'fail' };
+
+      const queuedStates = ['queued', 'pending', 'submitted', 'waiting', 'created'];
+      const runningStates = ['running', 'executing', 'progress', 'active'];
+      const completedStates = ['completed', 'done', 'success', 'ok', 'finished'];
+
+      if (queuedStates.includes(statusRaw) || queuedStates.includes(phaseRaw)) {
+        return { text: `${label} queued on ${backend}…`, state: 'queued' };
+      }
+
+      if (runningStates.includes(statusRaw) || runningStates.includes(phaseRaw)) {
+        const runtimeLabel = runtimeMs ? ` · ${Math.round(runtimeMs)} ms so far` : '';
+        return { text: `${label} running on ${backend}${runtimeLabel}…`, state: 'running' };
+      }
+
+      if (completedStates.includes(statusRaw) || run.ok === true) {
+        const runtimeLabel = runtimeMs ? ` in ${Math.round(runtimeMs)} ms` : '';
+        return { text: `${label} completed${runtimeLabel}.`, state: 'ok' };
+      }
+
+      if (statusRaw) return { text: `${label} status: ${statusRaw}.`, state: 'queued' };
+      return { text: `${label} ready.`, state: 'idle' };
+    }
+
+    function latestActiveShorRun(runs) {
+      if (!Array.isArray(runs) || runs.length === 0) return null;
+      const queuedOrRunning = runs.find((r) => {
+        const statusRaw = (r.status || r.state || r.phase || '').toString().toLowerCase();
+        const phaseRaw = (r.phase || r.stage || '').toString().toLowerCase();
+        const queuedStates = ['queued', 'pending', 'submitted', 'waiting', 'created'];
+        const runningStates = ['running', 'executing', 'progress', 'active'];
+        return queuedStates.includes(statusRaw) || queuedStates.includes(phaseRaw) || runningStates.includes(statusRaw) || runningStates.includes(phaseRaw);
+      });
+      return queuedOrRunning || runs[0];
+    }
+
+    function updateShorWorkspaceStatusFromRuns(runs) {
+      const desc = describeShorRunPhase(latestActiveShorRun(runs));
+      updateShorWorkspaceSnapshot(desc);
+    }
+
     function updateShorBackendFields() {
       if (!shorBackendSelect) return;
       const mode = shorBackendSelect.value;
@@ -2380,6 +2585,39 @@
       }
 
       updateShorLimitNote();
+      updateShorWorkspaceSnapshot();
+    }
+
+    function updateShorWorkspaceSnapshot(statusOverride) {
+      if (!shorWorkspaceModulus) return;
+      const N = (shorModulus?.value || '').trim();
+      const e = (shorExponent?.value || '').trim();
+      const backend_mode = (shorBackendSelect?.value || 'aer').toLowerCase();
+      const method = (shorMethodSelect?.value || 'auto').toLowerCase();
+      const shots = (shorShotsInput?.value || '').trim();
+      const plaintext_text = (shorPlainText?.value || '').trim();
+      const plaintext_int = (shorPlainInt?.value || '').trim();
+      const ciphertext = (shorCiphertext?.value || '').trim();
+      const guardrail = shorLimitNote?.textContent || '';
+
+      shorWorkspaceModulus.textContent = N || '—';
+      shorWorkspaceExponent.textContent = e || '—';
+      shorWorkspaceBackend.textContent = `${backend_mode} • ${method}`;
+      shorWorkspacePlaintext.textContent = plaintext_text
+        ? `text: "${plaintext_text.slice(0, 90)}"`
+        : plaintext_int || '—';
+      shorWorkspaceCiphertext.textContent = ciphertext || '—';
+      shorWorkspaceShots.textContent = `${shots || 'auto'} | ${guardrail}`;
+      if (statusOverride) {
+        setShorWorkspaceStatus(statusOverride.text, statusOverride.state);
+      } else if (shorWorkspaceStatus) {
+        const current = (shorWorkspaceStatus.textContent || '').trim();
+        const status = (shorRunStatus?.textContent || '').trim();
+        const derived = (current && shorWorkspaceStatus.dataset.state && shorWorkspaceStatus.dataset.state !== 'idle')
+          ? current
+          : status || 'Ready for input';
+        setShorWorkspaceStatus(derived, shorWorkspaceStatus.dataset.state || 'idle');
+      }
     }
 
     function collectShorBackendOptions() {
@@ -2429,19 +2667,147 @@
       });
     }
 
-    async function refreshShorRuns() {
+    async function refreshShorRuns(options = {}) {
       if (!shorRunStatus) return;
-      shorRunStatus.textContent = 'Loading runs from /shor/runs…';
+      const { silent } = options;
+      if (shorRunPollInFlight) {
+        shorRunPollPending = true;
+        return;
+      }
+      if (!silent) shorRunStatus.textContent = 'Loading runs from /shor/runs…';
+      shorRunPollInFlight = true;
       try {
         const data = await apiGet('/shor/runs?limit=12');
         shorRunsCache = data?.runs || [];
         renderShorRuns(shorRunsCache);
         renderExperimentsTable();
+        updateShorWorkspaceStatusFromRuns(shorRunsCache);
         shorRunStatus.textContent = `Runs loaded (${shorRunsCache.length || 0}).`;
       } catch (err) {
-        shorRunStatus.textContent = 'Runs unavailable (/shor/runs).';
+        if (!silent) shorRunStatus.textContent = 'Runs unavailable (/shor/runs).';
         shorLog({ error: err.message });
+      } finally {
+        shorRunPollInFlight = false;
+        if (shorRunPollPending) {
+          shorRunPollPending = false;
+          refreshShorRuns({ silent: true });
+        }
       }
+    }
+
+    function startShorRunPolling() {
+      if (shorRunPollTimer) return;
+      if (shorRunPollTimer) clearInterval(shorRunPollTimer);
+      shorRunPollTimer = setInterval(() => refreshShorRuns({ silent: true }), SHOR_RUN_POLL_INTERVAL_MS);
+      if (!startShorRunPolling._visibilityHooked) {
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'visible') refreshShorRuns({ silent: true });
+        });
+        startShorRunPolling._visibilityHooked = true;
+      }
+    }
+
+    function stopShorRunPolling() {
+      if (shorRunPollTimer) clearInterval(shorRunPollTimer);
+      shorRunPollTimer = null;
+    }
+
+    function applyLiveShorRunPayload(payload) {
+      const detail = payload?.run || payload?.detail || payload;
+      if (!detail || typeof detail !== 'object') return;
+      const id = detail.run_id || detail.id || detail.uuid;
+      if (!id) return;
+
+      const idx = shorRunsCache.findIndex((r) => (r.run_id || r.id || r.uuid) === id);
+      if (idx >= 0) {
+        shorRunsCache[idx] = { ...shorRunsCache[idx], ...detail };
+      } else {
+        shorRunsCache.unshift(detail);
+        shorRunsCache = shorRunsCache.slice(0, 12);
+      }
+
+      renderShorRuns(shorRunsCache);
+      renderExperimentsTable();
+      updateShorWorkspaceStatusFromRuns(shorRunsCache);
+    }
+
+    function stopShorLiveChannel() {
+      if (shorRunEventSource) {
+        try { shorRunEventSource.close(); } catch (_) {}
+      }
+      if (shorRunSocket) {
+        try { shorRunSocket.close(); } catch (_) {}
+      }
+      shorRunEventSource = null;
+      shorRunSocket = null;
+    }
+
+    function startShorLiveChannel() {
+      stopShorLiveChannel();
+
+      const onLiveError = (label) => {
+        if (shorRunStatus && !shorRunPollInFlight) {
+          shorRunStatus.textContent = `${label}; falling back to polling.`;
+        }
+        startShorRunPolling();
+      };
+
+      const onLiveConnected = (mode) => {
+        if (shorRunStatus) shorRunStatus.textContent = `Live ${mode} updates engaged.`;
+        stopShorRunPolling();
+      };
+
+      if (window.EventSource) {
+        try {
+          const es = new EventSource(shorStreamUrl(SHOR_STREAM_PATH), { withCredentials: true });
+          shorRunEventSource = es;
+          es.onmessage = (evt) => {
+            try {
+              const parsed = JSON.parse(evt.data || '{}');
+              applyLiveShorRunPayload(parsed);
+            } catch (_) {}
+          };
+          es.onerror = () => {
+            stopShorLiveChannel();
+            onLiveError('Shor live stream unavailable');
+          };
+          onLiveConnected('SSE');
+          return;
+        } catch (err) {
+          stopShorLiveChannel();
+          onLiveError('Shor live stream unavailable');
+        }
+      }
+
+      if ('WebSocket' in window) {
+        try {
+          const wsUrl = shorWebSocketUrl(SHOR_WS_PATH);
+          if (!wsUrl) throw new Error('WebSocket URL invalid');
+          const sock = new WebSocket(wsUrl);
+          shorRunSocket = sock;
+          sock.onopen = () => onLiveConnected('WebSocket');
+          sock.onmessage = (evt) => {
+            try {
+              const parsed = JSON.parse(evt.data || '{}');
+              applyLiveShorRunPayload(parsed);
+            } catch (_) {}
+          };
+          sock.onerror = () => {
+            stopShorLiveChannel();
+            onLiveError('Shor WebSocket unavailable');
+          };
+          sock.onclose = () => {
+            stopShorLiveChannel();
+            startShorRunPolling();
+          };
+          return;
+        } catch (err) {
+          stopShorLiveChannel();
+          onLiveError('Shor WebSocket unavailable');
+        }
+      }
+
+      startShorRunPolling();
     }
 
     async function openShorRun(runId) {
@@ -2451,6 +2817,10 @@
         const data = await apiGet(`/shor/runs/${encodeURIComponent(runId)}`);
         shorRunStatus.textContent = `Run ${runId} loaded.`;
         shorLog({ action: 'run_detail', ...data });
+        const detail = data?.run || data?.detail || data;
+        if (detail && typeof detail === 'object') {
+          updateShorWorkspaceSnapshot(describeShorRunPhase(detail));
+        }
       } catch (err) {
         shorRunStatus.textContent = `Run ${runId} unavailable.`;
         shorLog({ error: err.message });
@@ -2601,6 +2971,25 @@
       if (shorDecryptBtn) shorDecryptBtn.addEventListener('click', shorDecrypt);
       if (shorFactorBtn) shorFactorBtn.addEventListener('click', shorFactor);
       if (shorEstimateBtn) shorEstimateBtn.addEventListener('click', shorEstimate);
+      [
+        shorPrimeBits,
+        shorModulus,
+        shorExponent,
+        shorPlainInt,
+        shorPlainText,
+        shorCiphertext,
+        shorShotsInput,
+        shorWorkspaceNotes,
+      ].forEach((el) => {
+        if (el) {
+          el.addEventListener('input', updateShorWorkspaceSnapshot);
+          el.addEventListener('change', updateShorWorkspaceSnapshot);
+        }
+      });
+
+      updateShorWorkspaceSnapshot();
+      startShorRunPolling();
+      startShorLiveChannel();
     }
 
     function fmtTimeFromEpochSeconds(epochSec) {
