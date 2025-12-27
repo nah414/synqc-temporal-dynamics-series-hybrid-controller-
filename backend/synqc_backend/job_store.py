@@ -1,164 +1,192 @@
 from __future__ import annotations
 
 import json
-import os
-import sqlite3
-import threading
 import time
-from typing import Any, Optional
+import uuid
+from enum import Enum
+from typing import Any, Dict, Optional, Tuple
+
+from pydantic import BaseModel, Field
+
+from .redis_client import get_redis
 
 
-class SqliteJobStore:
-    """
-    Minimal durable spool for jobs.
-    - Survives process restart
-    - Lets us requeue QUEUED jobs
-    - Marks RUNNING jobs as "abandoned" on restart (safe default)
-    """
+class JobStatus(str, Enum):
+    queued = "queued"
+    running = "running"
+    succeeded = "succeeded"
+    failed = "failed"
+    cancelled = "cancelled"
 
-    def __init__(self, path: str) -> None:
-        self._path = path
-        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
 
-        self._lock = threading.Lock()
-        self._conn = sqlite3.connect(path, check_same_thread=False)
-        self._conn.execute("PRAGMA journal_mode=WAL;")
-        self._conn.execute("PRAGMA synchronous=NORMAL;")
+class JobErrorInfo(BaseModel):
+    code: str
+    message: str
+    details: Dict[str, Any] = Field(default_factory=dict)
 
-        self._conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS jobs (
-              job_id TEXT PRIMARY KEY,
-              status TEXT NOT NULL,
-              created_at REAL NOT NULL,
-              started_at REAL,
-              finished_at REAL,
-              session_id TEXT,
-              request_json TEXT NOT NULL,
-              result_json TEXT,
-              error TEXT,
-              error_detail_json TEXT
-            );
-            """
-        )
-        self._conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);")
-        self._conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_created_at ON jobs(created_at);")
-        self._conn.commit()
 
-    def upsert_queued(self, *, job_id: str, created_at: float, session_id: str, request: dict[str, Any]) -> None:
-        with self._lock:
-            self._conn.execute(
-                """
-                INSERT INTO jobs (job_id, status, created_at, session_id, request_json)
-                VALUES (?, 'queued', ?, ?, ?)
-                ON CONFLICT(job_id) DO UPDATE SET
-                  status='queued',
-                  session_id=excluded.session_id,
-                  request_json=excluded.request_json;
-                """,
-                (job_id, created_at, session_id, json.dumps(request, separators=(",", ":"))),
-            )
-            self._conn.commit()
+class JobRecord(BaseModel):
+    job_id: str
+    agent: str
+    status: JobStatus
+    created_at_unix: float
+    started_at_unix: Optional[float] = None
+    finished_at_unix: Optional[float] = None
+    attempts: int = 0
+    max_attempts: int = 3
+    run_input: Dict[str, Any] = Field(default_factory=dict)
+    result: Optional[Dict[str, Any]] = None
+    error: Optional[JobErrorInfo] = None
+    cancel_requested: bool = False
 
-    def mark_running(self, *, job_id: str, started_at: float) -> None:
-        with self._lock:
-            self._conn.execute(
-                "UPDATE jobs SET status='running', started_at=? WHERE job_id=?;",
-                (started_at, job_id),
-            )
-            self._conn.commit()
 
-    def mark_finished(
-        self,
-        *,
-        job_id: str,
-        status: str,
-        finished_at: float,
-        result: Optional[dict[str, Any]] = None,
-        error: Optional[str] = None,
-        error_detail: Optional[dict[str, Any]] = None,
-    ) -> None:
-        with self._lock:
-            self._conn.execute(
-                """
-                UPDATE jobs
-                SET status=?,
-                    finished_at=?,
-                    result_json=?,
-                    error=?,
-                    error_detail_json=?
-                WHERE job_id=?;
-                """,
-                (
-                    status,
-                    finished_at,
-                    json.dumps(result, separators=(",", ":")) if result is not None else None,
-                    error,
-                    json.dumps(error_detail, separators=(",", ":")) if error_detail is not None else None,
-                    job_id,
-                ),
-            )
-            self._conn.commit()
+def _key(job_id: str) -> str:
+    return f"synqc:job:{job_id}"
 
-    def load_incomplete(self, limit: int = 1000) -> list[dict[str, Any]]:
-        with self._lock:
-            cur = self._conn.execute(
-                """
-                SELECT job_id, status, created_at, started_at, session_id, request_json
-                FROM jobs
-                WHERE status IN ('queued', 'running')
-                ORDER BY created_at ASC
-                LIMIT ?;
-                """,
-                (limit,),
-            )
-            rows = cur.fetchall()
 
-        out: list[dict[str, Any]] = []
-        for job_id, status, created_at, started_at, session_id, request_json in rows:
-            out.append(
-                {
-                    "job_id": job_id,
-                    "status": status,
-                    "created_at": created_at,
-                    "started_at": started_at,
-                    "session_id": session_id or "",
-                    "request": json.loads(request_json),
-                }
-            )
-        return out
+def _idempotency_key(agent: str, key: str) -> str:
+    return f"synqc:idempotency:{agent}:{key}"
 
-    def abandon_running_jobs(self) -> list[str]:
-        """
-        Mark running jobs as failed due to restart. Returns affected job_ids.
-        """
-        now = time.time()
-        with self._lock:
-            cur = self._conn.execute("SELECT job_id FROM jobs WHERE status='running';")
-            ids = [r[0] for r in cur.fetchall()]
 
-            for job_id in ids:
-                self._conn.execute(
-                    """
-                    UPDATE jobs
-                    SET status='failed',
-                        finished_at=?,
-                        error=?,
-                        error_detail_json=?
-                    WHERE job_id=? AND status='running';
-                    """,
-                    (
-                        now,
-                        "Abandoned due to worker restart",
-                        json.dumps(
-                            {
-                                "code": "abandoned_by_restart",
-                                "message": "Job was running when the process restarted; marked failed.",
-                            },
-                            separators=(",", ":"),
-                        ),
-                        job_id,
-                    ),
-                )
-            self._conn.commit()
-        return ids
+def _json_dumps(obj: Any) -> str:
+    return json.dumps(obj, separators=(",", ":"), ensure_ascii=False)
+
+
+def _json_loads(s: str) -> Any:
+    return json.loads(s)
+
+
+def create_job(
+    *,
+    agent: str,
+    run_input: Dict[str, Any],
+    idempotency_key: Optional[str] = None,
+    max_attempts: int = 3,
+    job_ttl_seconds: int = 7 * 24 * 3600,
+    idempotency_ttl_seconds: int = 24 * 3600,
+) -> Tuple[str, bool]:
+    r = get_redis()
+
+    if idempotency_key:
+        existing = r.get(_idempotency_key(agent, idempotency_key))
+        if existing:
+            return str(existing), True
+
+    job_id = uuid.uuid4().hex
+    now = time.time()
+    record = JobRecord(
+        job_id=job_id,
+        agent=agent,
+        status=JobStatus.queued,
+        created_at_unix=now,
+        attempts=0,
+        max_attempts=max_attempts,
+        run_input=run_input,
+    )
+
+    pipe = r.pipeline()
+    pipe.hset(
+        _key(job_id),
+        mapping={
+            "agent": record.agent,
+            "status": record.status.value,
+            "created_at_unix": str(record.created_at_unix),
+            "started_at_unix": "",
+            "finished_at_unix": "",
+            "attempts": str(record.attempts),
+            "max_attempts": str(record.max_attempts),
+            "run_input_json": _json_dumps(record.run_input),
+            "result_json": "",
+            "error_json": "",
+            "cancel_requested": "0",
+        },
+    )
+    pipe.expire(_key(job_id), job_ttl_seconds)
+    if idempotency_key:
+        pipe.setex(_idempotency_key(agent, idempotency_key), idempotency_ttl_seconds, job_id)
+    pipe.execute()
+
+    return job_id, False
+
+
+def get_job(job_id: str) -> Optional[JobRecord]:
+    r = get_redis()
+    data = r.hgetall(_key(job_id))
+    if not data:
+        return None
+
+    def parse_float(raw: str) -> Optional[float]:
+        raw = (raw or "").strip()
+        if raw == "":
+            return None
+        try:
+            return float(raw)
+        except ValueError:
+            return None
+
+    def parse_int(raw: str, default: int = 0) -> int:
+        try:
+            return int(raw)
+        except Exception:
+            return default
+
+    error = None
+    if data.get("error_json"):
+        try:
+            error = JobErrorInfo.model_validate(_json_loads(data["error_json"]))
+        except Exception:
+            error = JobErrorInfo(code="unknown_error", message="Failed to parse stored error.", details={})
+
+    result = None
+    if data.get("result_json"):
+        try:
+            result = _json_loads(data["result_json"])
+        except Exception:
+            result = {"_parse_error": True}
+
+    return JobRecord(
+        job_id=job_id,
+        agent=data.get("agent", ""),
+        status=JobStatus(data.get("status", JobStatus.failed.value)),
+        created_at_unix=float(data.get("created_at_unix", "0") or "0"),
+        started_at_unix=parse_float(data.get("started_at_unix", "")),
+        finished_at_unix=parse_float(data.get("finished_at_unix", "")),
+        attempts=parse_int(data.get("attempts", "0")),
+        max_attempts=parse_int(data.get("max_attempts", "3"), 3),
+        run_input=_json_loads(data.get("run_input_json", "{}") or "{}"),
+        result=result,
+        error=error,
+        cancel_requested=(data.get("cancel_requested", "0") == "1"),
+    )
+
+
+def update_status(job_id: str, status: JobStatus, *, started: bool = False, finished: bool = False) -> None:
+    r = get_redis()
+    mapping: Dict[str, str] = {"status": status.value}
+    now = str(time.time())
+    if started:
+        mapping["started_at_unix"] = now
+    if finished:
+        mapping["finished_at_unix"] = now
+    r.hset(_key(job_id), mapping=mapping)
+
+
+def increment_attempts(job_id: str) -> int:
+    r = get_redis()
+    return int(r.hincrby(_key(job_id), "attempts", 1))
+
+
+def set_result(job_id: str, result: Dict[str, Any]) -> None:
+    r = get_redis()
+    r.hset(_key(job_id), mapping={"result_json": _json_dumps(result)})
+
+
+def set_error(job_id: str, *, code: str, message: str, details: Optional[Dict[str, Any]] = None) -> None:
+    r = get_redis()
+    err = JobErrorInfo(code=code, message=message, details=details or {})
+    r.hset(_key(job_id), mapping={"error_json": err.model_dump_json()})
+
+
+def request_cancel(job_id: str) -> None:
+    r = get_redis()
+    r.hset(_key(job_id), mapping={"cancel_requested": "1"})

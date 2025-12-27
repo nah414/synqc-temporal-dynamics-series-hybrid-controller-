@@ -9,7 +9,10 @@ from threading import Event, Lock, Timer
 from typing import Callable, Dict, Optional
 
 from .engine import BudgetExceeded
-from .job_store import SqliteJobStore
+try:  # pragma: no cover - optional persistence
+    from .job_store import SqliteJobStore  # type: ignore
+except Exception:  # pragma: no cover - allow runtime without sqlite spool
+    SqliteJobStore = None  # type: ignore
 from .provider_clients import ProviderClientError
 from .models import (
     ErrorCode,
@@ -98,7 +101,9 @@ class JobQueue:
         self._max_pending = int(max_pending)
         self._shutdown = False
 
-        self._persist: SqliteJobStore | None = SqliteJobStore(persistence_path) if persistence_path else None
+        self._persist: SqliteJobStore | None = None
+        if persistence_path and SqliteJobStore:
+            self._persist = SqliteJobStore(persistence_path)
 
         # Cooperative cancel support: if worker_fn accepts a 3rd arg, pass cancel_event
         sig = inspect.signature(worker_fn)

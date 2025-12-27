@@ -13,6 +13,9 @@ from typing import List, Optional
 from fastapi import Depends, FastAPI, Header, HTTPException, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 
+from synqc_backend.consumer_api import router as consumer_router
+from synqc_backend.middleware import add_default_middlewares
+
 from .budget import BudgetTracker
 from .config import settings
 from .control_profiles import ControlProfileStore, ControlProfileUpdate, ControlProfile
@@ -155,6 +158,8 @@ app = FastAPI(
         "(health, latency, backend comparison, DPD demo) and returns KPIs.")
 )
 
+add_default_middlewares(app)
+
 
 def _backend_version() -> str:
     try:
@@ -166,6 +171,7 @@ auth_store = AuthStore(settings.auth_db_path)
 app.state.auth_store = auth_store
 app.include_router(auth_router, prefix="/auth", tags=["auth"])
 app.include_router(physics_router)
+app.include_router(consumer_router)
 
 
 @app.on_event("shutdown")

@@ -37,7 +37,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    command: ["python", "-m", "synqc_backend.worker"]
+    command: ["python", "-m", "synqc_backend.worker_service", "--queue", "${SYNQC_QUEUE_NAME:-default}"]
     environment:
       SYNQC_REDIS_URL: ${SYNQC_REDIS_URL:-redis://redis:6379/0}
       SYNQC_HEALTH_CACHE_TTL_SECONDS: ${SYNQC_HEALTH_CACHE_TTL_SECONDS:-3}
