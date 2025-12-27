@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import time
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
+import asyncio
 from pathlib import Path
 from time import sleep
 
@@ -12,7 +13,8 @@ from .control_profiles import ControlProfileStore
 from .engine import BudgetExceeded, SynQcEngine
 from .logging_utils import configure_json_logging, get_logger, log_context
 from .metrics_recorder import run_metrics
-from .models import ErrorCode
+from .models import ErrorCode, ExperimentPreset
+from .agents.multicall import run_multicall_agent
 from .provider_clients import ProviderClientError
 from .qubit_usage import SessionQubitTracker
 from .run_queue import QueuedRun, RedisRunQueue
@@ -86,6 +88,30 @@ def _process_job(engine: SynQcEngine, queue: RedisRunQueue, job: QueuedRun) -> N
         session_id=job.session_id,
     ):
         try:
+            if job.request.preset is ExperimentPreset.MULTICALL_DUAL_CLOCKING:
+                result = asyncio.run(
+                    run_multicall_agent(job.id, job.request.model_dump())
+                )
+                finished = time.time()
+                job.finished_at = finished
+                latency = max(0.0, finished - start_time)
+                try:
+                    engine._store.add(result)  # type: ignore[attr-defined]
+                except Exception:
+                    logger.warning("Unable to persist multicall result to store", exc_info=True)
+
+                run_metrics.record_success(job.request.hardware_target, latency)
+                queue.complete_success(job, result=result)
+                logger.info(
+                    "Run succeeded",
+                    extra={
+                        "job_id": job.id,
+                        "experiment_id": job.id,
+                        "hardware_target": job.request.hardware_target,
+                        "latency_s": latency,
+                    },
+                )
+                return
             result = _execute_with_timeout(
                 engine.run_experiment, settings.job_timeout_seconds, job.request, job.session_id
             )

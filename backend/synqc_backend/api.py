@@ -15,6 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from synqc_backend.consumer_api import router as consumer_router
 from synqc_backend.middleware import add_default_middlewares
+from synqc_backend.orchestration import get_event_store
 
 from .budget import BudgetTracker
 from .config import settings
@@ -541,6 +542,35 @@ def get_experiment(experiment_id: str, _: None = Depends(require_api_key)) -> Ru
             },
         )
     return run
+
+
+@app.get("/experiments/{experiment_id}/events", tags=["experiments"])
+def experiment_events(experiment_id: str, limit: int = 300, _: None = Depends(require_api_key)) -> dict:
+    """Return recent orchestration events for an experiment."""
+
+    if limit <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": ErrorCode.INVALID_REQUEST.value,
+                "error_code": ErrorCode.INVALID_REQUEST.value,
+                "error_message": "limit must be positive",
+                "error_detail": {"code": ErrorCode.INVALID_REQUEST.value},
+                "action_hint": "Use a positive limit value.",
+            },
+        )
+
+    store_events = get_event_store()
+    return {"experiment_id": experiment_id, "events": store_events.list(experiment_id, limit=limit)}
+
+
+@app.delete("/experiments/{experiment_id}/events", status_code=204, tags=["experiments"])
+def clear_experiment_events(experiment_id: str, _: None = Depends(require_api_key)) -> None:
+    """Clear stored events for an experiment."""
+
+    store_events = get_event_store()
+    store_events.clear(experiment_id)
+    return None
 
 
 @app.get("/experiments/recent", response_model=list[ExperimentSummary], tags=["experiments"])

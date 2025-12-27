@@ -17,6 +17,7 @@ class ExperimentPreset(str, Enum):
     BACKEND_COMPARE = "backend_compare"
     DPD_DEMO = "dpd_demo"
     GROVER_DEMO = "grover_demo"
+    MULTICALL_DUAL_CLOCKING = "multicall_dual_clocking"
 
 
 class ExperimentStatus(str, Enum):
