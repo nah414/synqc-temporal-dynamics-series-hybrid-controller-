@@ -148,3 +148,33 @@ These are the knobs that make the feature feel "native" inside SynQc:
 ```bash
 pytest backend/tests -q
 ```
+
+### Enabling the RSA tests (`synqc_shor` import)
+
+The RSA roundtrip tests in `backend/tests/test_rsa_roundtrip.py` are skipped when the optional `synqc_shor` package is missing. To exercise them locally:
+
+1) Create/activate a virtual environment.
+
+2) Make sure your environment has the `wheel` build helper available (avoids the missing `wheel` command during editable installs):
+
+```bash
+python -m pip install --upgrade pip wheel
+```
+
+3) Install the add-on in editable mode (this wires up `synqc_shor` without PYTHONPATH hacks):
+
+```bash
+pip install -e './synqc_shor_addon_v2[tests]'
+```
+
+4) (Optional) Install quantum/hardware extras if you want to run Qiskit-backed Shor:
+
+```bash
+pip install 'synqc_shor[qiskit]'  # plus [braket] or [ionq] if needed
+```
+
+5) Run the targeted test file to confirm imports resolve:
+
+```bash
+pytest synqc_shor_addon_v2/backend/tests/test_rsa_roundtrip.py -q
+```

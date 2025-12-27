@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "synqc_shor"
+version = "0.1.0"
+description = "Shor / RSA add-on for SynQc"
+readme = {file = "synqc_shor_addon_v2/README.md", content-type = "text/markdown"}
+authors = [{name = "SynQc"}]
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.110",
+    "pydantic>=2.0",
+]
+
+[project.optional-dependencies]
+server = ["uvicorn[standard]>=0.27"]
+qiskit = [
+    "qiskit>=1.0",
+    "qiskit-aer>=0.13",
+    "qiskit-algorithms>=0.3",
+    "qiskit-ibm-runtime>=0.20",
+]
+braket = ["qiskit-braket-provider>=0.2"]
+ionq = ["qiskit-ionq>=0.4"]
+tests = [
+    "pytest>=7.0",
+    "wheel>=0.38",
+]
+
+[tool.setuptools]
+package-dir = {"" = "synqc_shor_addon_v2/backend"}
+
+[tool.setuptools.packages.find]
+where = ["synqc_shor_addon_v2/backend"]

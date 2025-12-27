@@ -1,5 +1,7 @@
 import pytest
 
+pytest.importorskip("synqc_shor")
+
 from synqc_shor.rsa import generate_rsa_keypair, rsa_encrypt_int, rsa_decrypt_int
 from synqc_shor.factor import factor_N
 

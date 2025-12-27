@@ -42,6 +42,7 @@ UI → API → Queue → Provider → Store → UI
 - see KPIs + history + experiments table + details view
 - GitHub
 - +1
+- Optional: follow [`docs/Dual_Clocking_Qubits_Integration.md`](docs/Dual_Clocking_Qubits_Integration.md) to run the Dual-Clocking-Qubits toolkit as a sidecar without changing this repo.
 
 ### SynQc preset demo (simulator)
 
