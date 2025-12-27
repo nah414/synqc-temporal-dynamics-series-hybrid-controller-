@@ -1,6 +1,6 @@
 # Optional Dual-Clocking-Qubits Integration Guide
 
-This guide shows how to run the external [Dual-Clocking-Qubits](https://github.com/nah414/Dual-Clocking-Qubits) toolkit **alongside** SynQc TDS without changing the core codebase. The integration stays opt-in and isolated so the existing roadmap (simulator-first demos, provider registry, hosted proof milestones) remains stable.
+This guide shows how to run the external [Dual-Clocking-Qubits](https://github.com/nah414/Dual-Clocking-Qubits) toolkit **alongside** SynQc TDS without changing the core codebase. The integration stays opt-in and isolated so the existing roadmap (simulator-first demos, provider registry, hosted proof milestones) remains stable. A staging folder is available at `tools/dual-clocking-qubits`, and a helper script (`./scripts/fetch_dual_clocking_tool.sh`) pulls the upstream toolkit into that location when you have network access.
 
 ## Why keep it sidecar-only?
 

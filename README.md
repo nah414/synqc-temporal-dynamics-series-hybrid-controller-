@@ -39,7 +39,7 @@ UI → API → Queue → Provider → Store → UI
 - see KPIs + history + experiments table + details view
 - GitHub
 - +1
-- Optional: follow [`docs/Dual_Clocking_Qubits_Integration.md`](docs/Dual_Clocking_Qubits_Integration.md) to run the Dual-Clocking-Qubits toolkit as a sidecar without changing this repo.
+- Optional: follow [`docs/Dual_Clocking_Qubits_Integration.md`](docs/Dual_Clocking_Qubits_Integration.md) to run the Dual-Clocking-Qubits toolkit as a sidecar without changing this repo. A staging folder lives at `tools/dual-clocking-qubits`; run `./scripts/fetch_dual_clocking_tool.sh` to download or update the toolkit when network access is available.
 
 ### SynQc preset demo (simulator)
 
