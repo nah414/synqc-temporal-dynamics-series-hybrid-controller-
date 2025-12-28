@@ -1,6 +1,6 @@
 # SynQc TDS – Hybrid Controller
 
-SynQc TDS is a “traffic controller” for complex computing jobs. You press a button, it decides whether the work runs on your normal computer or a quantum service, runs it safely in the background, and shows the results in a dashboard — no quantum PhD required.
+SynQc TDS is a “traffic controller” for complex computing jobs. You press a button, it decides whether the work runs on your normal computer or a quantum service, runs it safely in the background, and shows the results in a dashboard.
 
 You do **not** need quantum hardware or deep physics knowledge to use this project. SynQc TDS is designed so developers can:
 - Run advanced experiments safely
