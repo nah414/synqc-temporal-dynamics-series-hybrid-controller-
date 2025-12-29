@@ -181,6 +181,27 @@ jobs:
           rm -rf /tmp/.buildx-cache
           mv /tmp/.buildx-cache-new /tmp/.buildx-cache
 
+      - name: Package hosted images as artifacts
+        working-directory: archives/hosted/synqc_hosted_pack_v2
+        run: |
+          mkdir -p ci-images
+          mapfile -t images < <(
+            docker compose -f docker-compose.hosted.yml -f docker-compose.hosted.ci.yml config --images \
+            | grep synqc_hosted_pack_v2 \
+            | sort -u
+          )
+          for image in "${images[@]}"; do
+            safe_name=${image//[:\//]/_}
+            echo "Saving $image to ci-images/${safe_name}.tar.gz"
+            docker save "$image" | gzip >"ci-images/${safe_name}.tar.gz"
+          done
+
+      - name: Upload hosted image artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: hosted-compose-images
+          path: archives/hosted/synqc_hosted_pack_v2/ci-images
+
       - name: Run hosted compose smoke
         working-directory: archives/hosted/synqc_hosted_pack_v2
         env:
