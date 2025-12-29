@@ -1,0 +1,99 @@
+services:
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    # IMPORTANT: Do NOT publish API port in hosted mode.
+    expose:
+      - "8001"
+    volumes:
+      - synqc_data:/data
+    environment:
+      REDIS_ENABLED: "true"
+      REDIS_URL: "redis://redis:6379/0"
+      REDIS_EVENTS_CHANNEL: "synqc:events"
+
+      # In hosted mode, auth is enforced at the edge (oauth2-proxy).
+      SYNQC_REQUIRE_API_KEY: "false"
+      # Optional defense-in-depth (middleware you can wire into FastAPI):
+      SYNQC_REQUIRE_EDGE_IDENTITY: "${SYNQC_REQUIRE_EDGE_IDENTITY:-false}"
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8001/health || exit 1"]
+      interval: 10s
+      timeout: 2s
+      retries: 12
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: ["python", "-m", "synqc_backend.worker_service"]
+    environment:
+      REDIS_ENABLED: "true"
+      REDIS_URL: "redis://redis:6379/0"
+      REDIS_EVENTS_CHANNEL: "synqc:events"
+      SYNQC_REQUIRE_API_KEY: "false"
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    # IMPORTANT: Do NOT publish Redis in hosted mode.
+    expose:
+      - "6379"
+    volumes:
+      - synqc_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 2s
+      retries: 30
+    restart: unless-stopped
+
+  oauth2-proxy:
+    image: quay.io/oauth2-proxy/oauth2-proxy:latest
+    expose:
+      - "4180"
+    environment:
+      OAUTH2_PROXY_PROVIDER: "oidc"
+      OAUTH2_PROXY_OIDC_ISSUER_URL: "${OIDC_ISSUER_URL}"
+      OAUTH2_PROXY_CLIENT_ID: "${OIDC_CLIENT_ID}"
+      OAUTH2_PROXY_CLIENT_SECRET: "${OIDC_CLIENT_SECRET}"
+      OAUTH2_PROXY_REDIRECT_URL: "${OAUTH2_PROXY_REDIRECT_URL}"
+      OAUTH2_PROXY_COOKIE_SECRET: "${OAUTH2_PROXY_COOKIE_SECRET}"
+      OAUTH2_PROXY_EMAIL_DOMAINS: "${OAUTH2_PROXY_EMAIL_DOMAINS:-*}"
+      OAUTH2_PROXY_COOKIE_SECURE: "${OAUTH2_PROXY_COOKIE_SECURE:-true}"
+      OAUTH2_PROXY_COOKIE_SAMESITE: "${OAUTH2_PROXY_COOKIE_SAMESITE:-lax}"
+      OAUTH2_PROXY_HTTP_ADDRESS: "0.0.0.0:4180"
+      OAUTH2_PROXY_UPSTREAMS: "static://200"
+      OAUTH2_PROXY_SKIP_PROVIDER_BUTTON: "true"
+      OAUTH2_PROXY_SET_XAUTHREQUEST: "true"
+    restart: unless-stopped
+
+  # "edge" is the only public container in hosted mode:
+  # - Serves UI
+  # - Proxies /api/* to the internal API
+  # - Enforces OIDC (oauth2-proxy) for both UI and API
+  edge:
+    build:
+      context: .
+      dockerfile: ./deploy/hosted/edge/Dockerfile
+    ports:
+      - "${SYNQC_HTTP_PORT:-8080}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+      oauth2-proxy:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  synqc_data:
+  synqc_redis_data:
