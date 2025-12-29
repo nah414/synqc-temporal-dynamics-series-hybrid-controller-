@@ -17,6 +17,11 @@ This package provides:
   plus the local simulator so consumers can point SynQc TDS at real hardware stacks
   while retaining the same API surface.
 
+> Production providers are first-class: the simulator is present for demos and
+> offline validation, but hosted deployments can still drive the remote shells
+> as long as credentials are configured. Use `SYNQC_ALLOW_REMOTE_HARDWARE=false`
+> only when intentionally sandboxing.
+
 > This is a structured skeleton meant to be stable and extensible.
 > Real hardware integration (AWS Braket, IBM Qiskit, Azure Quantum, IonQ native, Rigetti SDK)
 > should be plugged into `synqc_backend.hardware_backends` in a controlled way, without
@@ -174,6 +179,30 @@ docker compose up --build
 
 The stack now includes a `redis` service configured for append-only persistence and mounted storage. The API is automatically pointed at this instance via `SYNQC_REDIS_URL=redis://redis:6379/0` (override with your own endpoint if needed). Data for Redis and the job queue are persisted in Docker volumes (`synqc_redis_data`, `synqc_data`) so containers can be restarted without losing state.
 
+### CORS configuration
+
+The backend no longer ships with permissive local CORS defaults. Set an explicit allowlist per environment with `SYNQC_ALLOWED_ORIGINS` (comma-separated). In `SYNQC_ENV=prod` an allowlist is required and docs are hidden by default. Examples:
+
+```bash
+# Allow only the bundled web UI served from localhost:8080
+export SYNQC_ALLOWED_ORIGINS=http://localhost:8080
+
+# Allow both localhost and a hosted demo origin
+export SYNQC_ALLOWED_ORIGINS=http://localhost:8080,https://demo.example.com
+```
+
+If the variable is unset or empty, cross-origin requests are rejected (same-origin requests still work when the UI and API are served together).
+
+### Quickstart health script
+
+Run a one-liner smoke test that pings `/health`, verifies Redis connectivity when configured, submits a simulator preset, and waits for it to complete:
+
+```bash
+SYNQC_API_URL=http://127.0.0.1:8001 \
+SYNQC_API_KEY=local-dev-key \  # optional, only when API keys are required
+python backend/scripts/quickstart_health_check.py
+```
+
 Once containers are healthy, verify the API can reach Redis by checking the health endpoint (returns `budget_tracker.redis_connected: true` when Redis is up):
 
 ```bash
@@ -325,6 +354,17 @@ Monitor `/health` while generating load to confirm counters move across workers 
 
 The backend exports Prometheus metrics on port `9000` by default (configurable via `SYNQC_METRICS_PORT`).
 Set `SYNQC_ENABLE_METRICS=false` to disable export, and adjust scrape cadence with `SYNQC_METRICS_COLLECTION_INTERVAL_SECONDS`.
+When multiple exporters run in a single process (e.g., API + worker scrape targets sharing one endpoint), enable `SYNQC_METRICS_USE_SHARED_REGISTRY=true`
+to reuse collectors safely; tests and local dev keep isolated registries by default to avoid duplicate collector warnings during reloads.
+
+To serve a single scrape target from the API itself, set `SYNQC_METRICS_SHARED_REGISTRY_ENDPOINT_ENABLED=true` (recommended for hosted
+deployments). This exposes `/metrics` using the shared registry so you can proxy the scrape path through your ingress alongside `/api/*`
+without relaxing per-instance isolation in development. Keep API authentication enabled so `/metrics` stays behind the same guardrails.
+
+When the worker runs out-of-process, enable `SYNQC_METRICS_WORKER_ENDPOINT_ENABLED=true` to expose a separate scrape handler from the
+worker. Combine this with `SYNQC_METRICS_WORKER_PORT`/`SYNQC_METRICS_WORKER_BIND_ADDRESS` to match your ingress and optionally
+`SYNQC_METRICS_WORKER_USE_SHARED_REGISTRY=true` if you want worker collectors registered against the shared registry for consolidated
+scrapes.
 
 Key series to scrape:
 

@@ -29,7 +29,7 @@ UI → API → Queue → Provider → Store → UI
 - Simulator-first baseline for reproducible demos
 - IBM/Qiskit integration milestone for live and Aer runs
 - Braket milestone behind the provider registry
-- Hosted demo milestone so prospects can click before cloning
+- Hosted demo milestone so prospects can click before cloning (see [Hosted Demo Playbook](docs/Hosted_Demo.md))
 
 ## Demo
 
@@ -40,6 +40,7 @@ UI → API → Queue → Provider → Store → UI
 - GitHub
 - +1
 - Optional: follow [`docs/Dual_Clocking_Qubits_Integration.md`](docs/Dual_Clocking_Qubits_Integration.md) to run the Dual-Clocking-Qubits toolkit as a sidecar without changing this repo. A staging folder lives at `tools/dual-clocking-qubits`; run `./scripts/fetch_dual_clocking_tool.sh` to download or update the toolkit when network access is available.
+- Use the hosted demo playbook in [`docs/Hosted_Demo.md`](docs/Hosted_Demo.md) to publish the static UI and point it at a reachable backend with CORS configured for your chosen origin.
 
 ### SynQc preset demo (simulator)
 
@@ -72,6 +73,9 @@ This repository combines:
   Quantum, IonQ Cloud, Rigetti Forest) plus the local simulator, illustrating how
   SynQc TDS plugs into a consumer hardware stack and software pipeline while
   preserving correction/accuracy and prediction workflows.
+  - Remote shells remain available for hosted deployments; the simulator is a safe
+    default, but set `SYNQC_ALLOW_REMOTE_HARDWARE=true` (and provider credentials)
+    to route jobs to live backends.
 
 ## What’s new in v0.4
 
@@ -193,6 +197,11 @@ docker compose ps
 curl -sf http://127.0.0.1:8001/health
 # Optionally, run an active Redis probe from inside the backend container
 docker compose run --rm api python -m synqc_backend.redis_healthcheck
+
+# Smoke check the API + Redis + simulator preset in one command
+SYNQC_API_URL=http://127.0.0.1:8001 \
+SYNQC_API_KEY=local-dev-key \  # optional, only when API keys are required
+python backend/scripts/quickstart_health_check.py
 ```
 
 Then open:

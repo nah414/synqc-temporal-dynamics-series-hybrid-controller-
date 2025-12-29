@@ -4,12 +4,25 @@ import logging
 import threading
 from typing import Optional
 
-from prometheus_client import Counter, Gauge, start_http_server
+from prometheus_client import CollectorRegistry, Counter, Gauge, start_http_server
 
 from .metrics_recorder import provider_metrics
 
 
 logger = logging.getLogger(__name__)
+
+_shared_registry: CollectorRegistry | None = None
+_shared_registry_lock = threading.Lock()
+
+
+def shared_prometheus_registry() -> CollectorRegistry:
+    """Return a shared registry for production scraping if enabled."""
+
+    global _shared_registry
+    with _shared_registry_lock:
+        if _shared_registry is None:
+            _shared_registry = CollectorRegistry()
+        return _shared_registry
 
 
 class MetricsExporter:
@@ -24,6 +37,7 @@ class MetricsExporter:
         port: int,
         bind_address: str,
         collection_interval_seconds: int,
+        registry: CollectorRegistry | None = None,
     ) -> None:
         self._budget_tracker = budget_tracker
         self._queue = queue
@@ -36,49 +50,61 @@ class MetricsExporter:
 
         self._previous_session_keys: Optional[int] = None
 
+        # Allow callers to isolate registries to avoid duplicate collectors when
+        # applications reload during tests or dev iterations.
+        self._registry = registry or CollectorRegistry()
+
         # Budget metrics
-        self._redis_connected = Gauge(
+        self._redis_connected = self._get_or_create_gauge(
             "synqc_redis_connected",
             "Redis connectivity status for the budget tracker (1=connected, 0=disconnected)",
             labelnames=["backend"],
         )
-        self._budget_session_keys = Gauge(
+        self._budget_session_keys = self._get_or_create_gauge(
             "synqc_budget_session_keys",
             "Number of active budget session keys",
             labelnames=["backend"],
         )
-        self._budget_session_key_churn_total = Counter(
+        self._budget_session_key_churn_total = self._get_or_create_counter(
             "synqc_budget_session_key_churn_total",
             "Count of changes in session budget key totals (tracks churn spikes)",
             labelnames=["backend"],
         )
 
         # Queue metrics
-        self._queue_total = Gauge("synqc_queue_jobs_total", "Total jobs tracked in the queue")
-        self._queue_queued = Gauge(
-            "synqc_queue_jobs_queued", "Jobs currently waiting to be executed"
+        self._queue_total = self._get_or_create_gauge(
+            "synqc_queue_jobs_total",
+            "Total jobs tracked in the queue",
         )
-        self._queue_running = Gauge(
-            "synqc_queue_jobs_running", "Jobs currently executing in the worker pool"
+        self._queue_queued = self._get_or_create_gauge(
+            "synqc_queue_jobs_queued",
+            "Jobs currently waiting to be executed",
         )
-        self._queue_succeeded = Gauge(
-            "synqc_queue_jobs_succeeded", "Jobs that completed successfully"
+        self._queue_running = self._get_or_create_gauge(
+            "synqc_queue_jobs_running",
+            "Jobs currently executing in the worker pool",
         )
-        self._queue_failed = Gauge("synqc_queue_jobs_failed", "Jobs that failed")
-        self._queue_oldest_age = Gauge(
+        self._queue_succeeded = self._get_or_create_gauge(
+            "synqc_queue_jobs_succeeded",
+            "Jobs that completed successfully",
+        )
+        self._queue_failed = self._get_or_create_gauge(
+            "synqc_queue_jobs_failed", "Jobs that failed"
+        )
+        self._queue_oldest_age = self._get_or_create_gauge(
             "synqc_queue_oldest_queued_age_seconds",
             "Age in seconds of the oldest queued job (0 when queue is empty)",
         )
-        self._queue_max_workers = Gauge(
+        self._queue_max_workers = self._get_or_create_gauge(
             "synqc_queue_max_workers",
             "Configured maximum worker threads available to execute jobs",
         )
-        self._queue_failure_codes = Gauge(
+        self._queue_failure_codes = self._get_or_create_gauge(
             "synqc_queue_failure_codes_total",
             "Total failures recorded by error_code",
             labelnames=["error_code"],
         )
-        self._queue_failure_targets = Gauge(
+        self._queue_failure_targets = self._get_or_create_gauge(
             "synqc_queue_failures_by_target_total",
             "Total failures recorded by hardware target",
             labelnames=["hardware_target"],
@@ -87,26 +113,32 @@ class MetricsExporter:
         self._known_failure_targets: set[str] = set()
         self._provider_seen_targets: set[str] = set()
 
-        self._provider_success = Gauge(
+        self._provider_success = self._get_or_create_gauge(
             "synqc_provider_health_success_total",
             "Snapshot of provider successes recorded by target",
             labelnames=["hardware_target"],
         )
-        self._provider_failure = Gauge(
+        self._provider_failure = self._get_or_create_gauge(
             "synqc_provider_health_failures_total",
             "Snapshot of provider failures recorded by target",
             labelnames=["hardware_target"],
         )
-        self._provider_simulated = Gauge(
+        self._provider_simulated = self._get_or_create_gauge(
             "synqc_provider_health_simulated_total",
             "Snapshot of provider simulation fallbacks recorded by target",
             labelnames=["hardware_target"],
         )
 
-        self._collection_errors = Counter(
+        self._collection_errors = self._get_or_create_counter(
             "synqc_metrics_collection_errors_total",
             "Total errors while collecting and exporting metrics",
         )
+
+    @property
+    def registry(self) -> CollectorRegistry:
+        """Expose the exporter registry for inspection in tests or health probes."""
+
+        return self._registry
 
     def start(self) -> None:
         """Start metrics exposition if enabled."""
@@ -119,7 +151,7 @@ class MetricsExporter:
             return
 
         try:
-            start_http_server(self._port, addr=self._addr)
+            start_http_server(self._port, addr=self._addr, registry=self._registry)
             logger.info(
                 "Started Prometheus metrics server", extra={"port": self._port}
             )
@@ -154,6 +186,28 @@ class MetricsExporter:
         self._collect_budget_metrics()
         self._collect_queue_metrics()
         self._collect_provider_metrics()
+
+    def _lookup_collector(self, name: str, expected_type: type):
+        existing = self._registry._names_to_collectors.get(name)  # noqa: SLF001
+        if existing is None:
+            return None
+        if not isinstance(existing, expected_type):
+            raise ValueError(f"Collector {name} already registered with mismatched type")
+        return existing
+
+    def _get_or_create_gauge(self, name: str, doc: str, labelnames: list[str] | None = None):
+        existing = self._lookup_collector(name, Gauge)
+        if existing:
+            return existing
+        return Gauge(name, doc, labelnames=labelnames or (), registry=self._registry)
+
+    def _get_or_create_counter(
+        self, name: str, doc: str, labelnames: list[str] | None = None
+    ):
+        existing = self._lookup_collector(name, Counter)
+        if existing:
+            return existing
+        return Counter(name, doc, labelnames=labelnames or (), registry=self._registry)
 
     def _collect_budget_metrics(self) -> None:
         summary = self._budget_tracker.health_summary()
