@@ -2082,17 +2082,13 @@
     // - If ?api= is set, respect it.
     // - Else if http(s), use same-origin /api.
     // - Else (file://), fallback to localhost backend.
-    function getApiBase() {
-      const u = new URL(window.location.href);
-      const override = u.searchParams.get("api");
-      if (override) return override.replace(/\/+$/, "");
-      if (location.protocol === "http:" || location.protocol === "https:") {
-        return location.origin + "/api";
-      }
-      return "http://localhost:8001";
-    }
+    const params = new URLSearchParams(window.location.search);
+    const apiOverride = params.get("api");
 
-    const API_BASE = getApiBase();
+    const isHttp = window.location.protocol === "http:" || window.location.protocol === "https:";
+    const API_BASE = apiOverride
+      ? apiOverride.replace(/\/+$/, "")
+      : (isHttp ? `${window.location.origin}/api` : "http://localhost:8001");
 
     // Supports BOTH:
     //  - X-Api-Key: <value>   (query param: ?api_key=... or ?key=...)

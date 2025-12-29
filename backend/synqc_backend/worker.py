@@ -12,6 +12,7 @@ from .config import settings
 from .control_profiles import ControlProfileStore
 from .engine import BudgetExceeded, SynQcEngine
 from .logging_utils import configure_json_logging, get_logger, log_context
+from .metrics import MetricsExporter, shared_prometheus_registry
 from .metrics_recorder import run_metrics
 from .models import ErrorCode, ExperimentPreset
 from .agents.multicall import run_multicall_agent
@@ -174,12 +175,39 @@ def _process_job(engine: SynQcEngine, queue: RedisRunQueue, job: QueuedRun) -> N
             )
 
 
+def build_worker_metrics_exporter(budget_tracker, queue):
+    """Optionally construct a metrics exporter for the worker process."""
+
+    if not settings.enable_metrics or not settings.metrics_worker_endpoint_enabled:
+        return None
+
+    registry = None
+    if settings.metrics_use_shared_registry or settings.metrics_worker_use_shared_registry:
+        registry = shared_prometheus_registry()
+
+    return MetricsExporter(
+        budget_tracker=budget_tracker,
+        queue=queue,
+        enabled=True,
+        port=settings.metrics_worker_port,
+        bind_address=settings.metrics_worker_bind_address,
+        collection_interval_seconds=settings.metrics_collection_interval_seconds,
+        registry=registry,
+    )
+
+
 def main() -> None:
     if not settings.redis_url:
         raise RuntimeError("Redis URL is required for the dedicated worker")
 
     engine = _build_engine()
     queue = RedisRunQueue(settings.redis_url, max_workers=settings.worker_pool_size)
+
+    worker_metrics_exporter = build_worker_metrics_exporter(
+        engine._budget_tracker, queue
+    )
+    if worker_metrics_exporter:
+        worker_metrics_exporter.start()
 
     logger.info("synqc-worker ready", extra={"redis_url": settings.redis_url, "max_workers": settings.worker_pool_size})
     try:

@@ -10,7 +10,7 @@ from threading import Lock
 from time import monotonic
 from typing import List, Optional
 
-from fastapi import Depends, FastAPI, Header, HTTPException, status, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, status, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from synqc_backend.consumer_api import router as consumer_router
@@ -30,7 +30,7 @@ from .providers import validate_credentials as validate_provider_credentials
 from .physics_router import router as physics_router
 from .jobs import JobQueue
 from .run_queue import build_run_queue
-from .metrics import MetricsExporter
+from .metrics import MetricsExporter, shared_prometheus_registry
 from .models import (
     ExperimentPreset,
     ExperimentStatus,
@@ -80,15 +80,23 @@ _embedded_queue = JobQueue(
     max_pending=settings.job_queue_max_pending,
 )
 queue = build_run_queue(_embedded_queue)
-metrics_exporter = MetricsExporter(
-    budget_tracker=budget_tracker,
-    queue=queue,
-    enabled=settings.enable_metrics,
-    port=settings.metrics_port,
-    bind_address=settings.metrics_bind_address,
-    collection_interval_seconds=settings.metrics_collection_interval_seconds,
-)
-metrics_exporter.start()
+metrics_exporter = None
+shared_registry = None
+if settings.metrics_shared_registry_endpoint_enabled or settings.metrics_use_shared_registry:
+    shared_registry = shared_prometheus_registry()
+
+if settings.enable_metrics:
+    registry = shared_registry if shared_registry is not None else None
+    metrics_exporter = MetricsExporter(
+        budget_tracker=budget_tracker,
+        queue=queue,
+        enabled=settings.enable_metrics,
+        port=settings.metrics_port,
+        bind_address=settings.metrics_bind_address,
+        collection_interval_seconds=settings.metrics_collection_interval_seconds,
+        registry=registry,
+    )
+    metrics_exporter.start()
 atexit.register(queue.shutdown, timeout=settings.job_graceful_shutdown_seconds)
 
 logger = get_logger(__name__)
@@ -152,11 +160,15 @@ def _seed_demo_runs() -> None:
 
 _seed_demo_runs()
 
+docs_enabled = settings.env != "prod"
 app = FastAPI(
     title="SynQc Temporal Dynamics Series Backend",
     description=(
         "Backend API for SynQc TDS console — exposes high-level experiment presets "
-        "(health, latency, backend comparison, DPD demo) and returns KPIs.")
+        "(health, latency, backend comparison, DPD demo) and returns KPIs."),
+    docs_url="/docs" if docs_enabled else None,
+    redoc_url="/redoc" if docs_enabled else None,
+    openapi_url="/openapi.json" if docs_enabled else None,
 )
 
 add_default_middlewares(app)
@@ -174,13 +186,27 @@ app.include_router(auth_router, prefix="/auth", tags=["auth"])
 app.include_router(physics_router)
 app.include_router(consumer_router)
 
+if settings.metrics_shared_registry_endpoint_enabled:
+    try:
+        from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+
+        metrics_registry = shared_prometheus_registry()
+
+        @app.get("/metrics", include_in_schema=False, dependencies=[Depends(require_api_key)])
+        async def shared_metrics() -> Response:
+            return Response(generate_latest(metrics_registry), media_type=CONTENT_TYPE_LATEST)
+
+    except Exception:  # pragma: no cover - defensive guard for optional dependency
+        logger.warning("Prometheus client not available; shared metrics endpoint disabled")
+
 
 @app.on_event("shutdown")
 async def _shutdown() -> None:
     await close_redis()
 
 def _cors_origins() -> list[str]:
-    # Ensures we never accidentally allow "*" when credentials are enabled.
+    if settings.env == "dev":
+        return ["*"]
     return settings.cors_allow_origins or []
 
 
@@ -221,22 +247,24 @@ def require_api_key(
     if require is None:
         require = bool(expected)
 
-    if not require:
+    if not require and not settings.auth_required:
         return
 
-    if not expected:
+    if settings.auth_required and not expected:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=status.HTTP_401_UNAUTHORIZED,
             detail={
-                "code": ErrorCode.INTERNAL_ERROR.value,
-                "error_code": ErrorCode.INTERNAL_ERROR.value,
-                "error_message": (
-                    "API key enforcement is enabled but no API key is configured on the server."
-                ),
-                "error_detail": {"code": ErrorCode.INTERNAL_ERROR.value},
-                "action_hint": "Set SYNQC_API_KEY or disable require_api_key.",
+                "code": ErrorCode.AUTH_REQUIRED.value,
+                "error_code": ErrorCode.AUTH_REQUIRED.value,
+                "error_message": "Authentication required. Configure JWT or set SYNQC_API_KEY.",
+                "error_detail": {"code": ErrorCode.AUTH_REQUIRED.value},
+                "action_hint": "Provide Authorization: Bearer <token> or configure SYNQC_API_KEY.",
             },
+            headers={"WWW-Authenticate": "Bearer"},
         )
+
+    if not expected:
+        return
 
     # 1) X-Api-Key header
     if x_api_key and secrets.compare_digest(x_api_key, expected):
@@ -288,7 +316,7 @@ def get_session_id(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins(),
-    allow_credentials=False,
+    allow_credentials=settings.cors_allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -296,7 +324,7 @@ app.add_middleware(
 
 @app.middleware("http")
 async def _inject_log_context(request: Request, call_next):
-    request_id = request.headers.get("X-Request-Id") or str(uuid.uuid4())
+    request_id = getattr(request.state, "request_id", None) or request.headers.get("X-Request-Id") or str(uuid.uuid4())
     session_id = get_session_id(
         x_session_id=request.headers.get("X-Session-Id"),
         authorization=request.headers.get("Authorization"),
@@ -306,7 +334,25 @@ async def _inject_log_context(request: Request, call_next):
     with log_context(request_id=request_id, session_id=session_id, path=request.url.path, method=request.method):
         response = await call_next(request)
 
-    response.headers["X-Request-Id"] = request_id
+    return response
+
+@app.middleware("http")
+async def _security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    response.headers.setdefault(
+        "Permissions-Policy",
+        "camera=(), microphone=(), geolocation=()",
+    )
+    response.headers.setdefault(
+        "Content-Security-Policy",
+        "default-src 'self'; connect-src 'self' https:; img-src 'self' data:; "
+        "style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'",
+    )
+    if settings.env == "prod":
+        response.headers.setdefault("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
     return response
 
 _HEALTH_CACHE: dict[str, object] = {"expires_at": 0.0, "payload": None}
