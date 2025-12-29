@@ -96,7 +96,7 @@ This repository combines:
   - `max_shots_per_experiment` drives the **Shot budget max** label and input clamp.
   - `default_shot_budget` is used when the field is empty/invalid.
 - `GET /hardware/targets` respects `allow_remote_hardware` (filters non-sim targets when disabled).
-- Added a single-file, fullstack review artifact: `SYNQC_FULLSTACK_ONEFILE_v0.4.md`.
+- Added a single-file, fullstack review artifact: `docs/SYNQC_FULLSTACK_ONEFILE_v0.4.md`.
 - Control panel includes the credit line: **Developed by eVision Enterprises**.
 
 ## What’s new in v0.2
@@ -121,8 +121,15 @@ This repository combines:
 - `backend/`
   - Python package `synqc_backend` (FastAPI + engine + storage).
 
+- `archives/`
+  - Optional hosted packs, overlays, add-ons, patch bundles, and cryptography scaffolds that used to live in the repository root.
+  - See `archives/README.md` for a quick index.
+
 - `docs/SynQc_Temporal_Dynamics_Series_Technical_Archive_v0_1.md`
   - Full technical archive (design + guardrails + workflow reference).
+
+- `docs/Process_and_System_Instructions.md`
+  - Single location for running SynQc TDS locally, in Docker, in hosted mode, and with optional add-ons.
 
 - `gpt/SynQc_GPT_Pro_Context_Instructions_v0_1.md`
   - Copy/paste instructions for building a GPT called **SynQc Guide** using the knowledge file above.
