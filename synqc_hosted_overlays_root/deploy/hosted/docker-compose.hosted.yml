@@ -1,0 +1,146 @@
+# Hosted (SaaS) docker-compose for SynQc
+#
+# This is tailored to your existing service names:
+#   - api (FastAPI / uvicorn on 8001)
+#   - worker (queue consumer)
+#   - redis (queue backend)
+#   - web (nginx static UI)
+#
+# Key hosted changes vs your local compose:
+#   - api: no published ports (NOT reachable from the internet)
+#   - redis: no published ports (NOT reachable from the internet)
+#   - web: becomes the "edge" (serves UI + proxies /api/* to api)
+#   - oauth2-proxy: provides OIDC login; nginx uses auth_request to protect / and /api
+#
+# Start:
+#   cp deploy/hosted/.env.hosted.example deploy/hosted/.env.hosted
+#   python scripts/generate_hosted_secrets.py   # paste into .env.hosted
+#   docker compose -f deploy/hosted/docker-compose.hosted.yml --env-file deploy/hosted/.env.hosted up -d --build
+#
+services:
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    # IMPORTANT: no "ports:" here in hosted mode
+    expose:
+      - "8001"
+    volumes:
+      - synqc_data:/data
+    environment:
+      REDIS_ENABLED: "true"
+      REDIS_URL: "redis://redis:6379/0"
+      REDIS_EVENTS_CHANNEL: "synqc:events"
+      UVICORN_WORKERS: ${UVICORN_WORKERS:-1}
+      SYNQC_REDIS_URL: ${SYNQC_REDIS_URL:-redis://redis:6379/0}
+      SYNQC_HEALTH_CACHE_TTL_SECONDS: ${SYNQC_HEALTH_CACHE_TTL_SECONDS:-3}
+
+      # Hosted defaults (safe-by-default; backend can ignore unknown vars)
+      SYNQC_ENV: ${SYNQC_ENV:-prod}
+      SYNQC_ENABLE_DOCS: ${SYNQC_ENABLE_DOCS:-false}
+      SYNQC_MAX_REQUEST_BYTES: ${SYNQC_MAX_REQUEST_BYTES:-1048576}
+
+      # Optional: if you implement proxy-trusted auth headers in the API later
+      SYNQC_TRUST_PROXY_HEADERS: ${SYNQC_TRUST_PROXY_HEADERS:-false}
+
+    depends_on:
+      redis:
+        condition: service_healthy
+      worker:
+        condition: service_started
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health').read()",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: ["python", "-m", "synqc_backend.worker_service", "--queue", "${SYNQC_QUEUE_NAME:-default}"]
+    environment:
+      SYNQC_REDIS_URL: ${SYNQC_REDIS_URL:-redis://redis:6379/0}
+      SYNQC_HEALTH_CACHE_TTL_SECONDS: ${SYNQC_HEALTH_CACHE_TTL_SECONDS:-3}
+      SYNQC_REQUIRE_API_KEY: "false"
+
+      # Hosted defaults (safe-by-default; backend can ignore unknown vars)
+      SYNQC_ENV: ${SYNQC_ENV:-prod}
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    # IMPORTANT: no "ports:" in hosted mode
+    volumes:
+      - synqc_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  # OIDC / OAuth login
+  oauth2-proxy:
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
+    environment:
+      OAUTH2_PROXY_PROVIDER: oidc
+      OAUTH2_PROXY_OIDC_ISSUER_URL: ${OAUTH2_PROXY_OIDC_ISSUER_URL}
+      OAUTH2_PROXY_CLIENT_ID: ${OAUTH2_PROXY_CLIENT_ID}
+      OAUTH2_PROXY_CLIENT_SECRET: ${OAUTH2_PROXY_CLIENT_SECRET}
+      OAUTH2_PROXY_COOKIE_SECRET: ${OAUTH2_PROXY_COOKIE_SECRET}
+
+      # If you run behind TLS (recommended), set true. For local testing on http, set false.
+      OAUTH2_PROXY_COOKIE_SECURE: ${OAUTH2_PROXY_COOKIE_SECURE:-true}
+      OAUTH2_PROXY_COOKIE_SAMESITE: ${OAUTH2_PROXY_COOKIE_SAMESITE:-lax}
+      OAUTH2_PROXY_COOKIE_HTTPONLY: "true"
+
+      OAUTH2_PROXY_EMAIL_DOMAINS: ${OAUTH2_PROXY_EMAIL_DOMAINS:-*}
+      OAUTH2_PROXY_REDIRECT_URL: ${OAUTH2_PROXY_REDIRECT_URL}
+      OAUTH2_PROXY_REVERSE_PROXY: "true"
+
+      # This is required for nginx auth_request mode to get X-Auth-Request-* headers.
+      OAUTH2_PROXY_SET_XAUTHREQUEST: "true"
+
+      # This is fine when you're using oauth2-proxy ONLY for auth checks.
+      OAUTH2_PROXY_UPSTREAMS: "file:///dev/null"
+
+      # Optional: allow websocket upgrades to pass through (not strictly required)
+      OAUTH2_PROXY_SKIP_PROVIDER_BUTTON: "true"
+      OAUTH2_PROXY_HTTP_ADDRESS: "0.0.0.0:4180"
+    restart: unless-stopped
+
+  # The edge: static UI + /api reverse proxy + auth_request enforcement
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    ports:
+      # In production you typically terminate TLS in front (443) and run the container on 80.
+      # For a VM with direct exposure you can map 80:80 and use a TLS proxy in front.
+      - "${SYNQC_WEB_BIND:-80}:80"
+    volumes:
+      # Override nginx config for hosted mode
+      - ./deploy/hosted/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      api:
+        condition: service_healthy
+      oauth2-proxy:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  synqc_data:
+  synqc_redis_data:
