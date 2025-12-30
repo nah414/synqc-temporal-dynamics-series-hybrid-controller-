@@ -22,6 +22,8 @@ Quantum experimentation is fragmented; SynQc standardizes runs, KPIs, and budget
 
 UI → API → Queue → Provider → Store → UI
 
+![Animated SynQc flow with neon panels showing UI, API, queue, providers, and results loop](docs/synqc-process-animated.svg)
+
 ![How SynQc flows from UI to API to queue to providers and back to the store](docs/how-it-works.svg)
 
 ### Roadmap
