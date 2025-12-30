@@ -1,3 +1,7 @@
+version: "3.9"
+
+name: synqc-tds
+
 services:
   api:
     build:
