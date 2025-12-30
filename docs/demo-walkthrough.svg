@@ -1,1 +1,114 @@
-<svg aria-label="SynQc demo walkthrough" height="540" role="img" viewBox="0 0 960 540" width="960"><style>.panel { fill: #0b1021; stroke: #3ad5ff; stroke-width: 2; } .title { fill: #e8f7ff; font-family: 'Segoe UI', sans-serif; font-size: 22px; font-weight: 800; letter-spacing: 0.3px; } .subtitle { fill: #9ffcff; font-family: 'Segoe UI', sans-serif; font-size: 14px; font-weight: 600; } .text { fill: #d9e6ff; font-family: 'Segoe UI', sans-serif; font-size: 16px; } .kpi { fill: #111a33; stroke: #9ffcff; stroke-width: 1.5; } .kpi-label { fill: #9ffcff; font-family: 'Segoe UI', sans-serif; font-size: 14px; } .kpi-value { fill: #ffffff; font-family: 'Consolas', monospace; font-size: 18px; font-weight: 700; } .badge { fill: #1e2a4d; stroke: #f9d15c; stroke-width: 1; } .badge-text { fill: #f9d15c; font-family: 'Segoe UI', sans-serif; font-size: 14px; font-weight: 700; } .arrow { stroke: #6ed2f0; stroke-width: 3; marker-end: url(#arrowhead); filter: url(#glow); opacity: 0.76; } .step-label { fill: #f9d15c; font-family: 'Segoe UI', sans-serif; font-size: 14px; font-weight: 700; letter-spacing: 0.5px; } .helper { fill: #cbe2ff; font-family: 'Segoe UI', sans-serif; font-size: 13px; font-style: italic; }</style><defs><linearGradient id="bg" x1="0" x2="1" y1="0" y2="1"><stop offset="0%" stop-color="#060b1a" /><stop offset="100%" stop-color="#0c1f36" /></linearGradient><marker id="arrowhead" markerHeight="8" markerWidth="12" orient="auto" refX="10" refY="4"><polygon fill="#6ed2f0" points="0 0, 12 4, 0 8" /></marker><filter height="140%" id="glow" width="140%" x="-20%" y="-20%"><feGaussianBlur result="blur" stdDeviation="0.9" /><feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter></defs><rect fill="url(#bg)" height="540" width="960" /><rect class="panel" fill-opacity="0.82" height="480" rx="16" ry="16" width="900" x="30" y="30" /><text class="title" x="60" y="70">SynQc preset demo (simulator)</text><text class="subtitle" x="60" y="92">Follow the flow arrows to see what updates when a preset runs</text><rect class="panel" fill-opacity="0.58" height="320" rx="14" ry="14" width="200" x="60" y="120" /><text class="step-label" x="75" y="150">STEP 1 — SELECT &amp; RUN</text><text class="text" x="75" y="175">Choose preset</text><text class="helper" x="75" y="193">For dummies: pick the experiment to try.</text><rect class="badge" height="44" rx="10" ry="10" width="170" x="75" y="208" /><text class="badge-text" x="90" y="217">Hello Quantum (Sim)</text><rect class="badge" height="44" rx="10" ry="10" stroke="#3ad5ff" width="170" x="75" y="266" /><text class="badge-text" x="98" y="293">Run preset ▶</text><text class="text" x="75" y="308">GPU/CPU ready</text><text class="text" x="75" y="338">Simulator max shots</text><text class="text" x="75" y="368">Queue depth: inline</text><path class="arrow" d="M260 250 H 340" /><rect class="panel" fill-opacity="0.6" height="160" rx="14" ry="14" width="270" x="340" y="120" /><text class="step-label" x="355" y="150">STEP 2 — LIVE KPIs</text><text class="text" x="355" y="175">KPIs update as the preset runs</text><text class="helper" x="355" y="189">For dummies: watch the numbers rise and fall.</text><rect class="kpi" height="75" rx="12" ry="12" width="115" x="355" y="205" /><text class="kpi-label" x="365" y="221">Fidelity</text><text class="kpi-value" x="365" y="243">99.2%</text><rect class="kpi" height="75" rx="12" ry="12" width="115" x="485" y="205" /><text class="kpi-label" x="495" y="221">Latency</text><text class="kpi-value" x="495" y="243">128 ms</text><path class="arrow" d="M475 290 V 345" /><rect class="panel" fill-opacity="0.6" height="120" rx="14" ry="14" width="270" x="340" y="345" /><text class="step-label" x="355" y="375">STEP 3 — HISTORY</text><text class="text" x="355" y="402">#1420  • preset=Hello Quantum • sim_local</text><text class="text" x="355" y="425">#1421  • preset=Hello Quantum • kpis saved</text><text class="text" x="355" y="448">#1422  • preset=Hello Quantum • artifacts ✓</text><text class="helper" x="355" y="460">For dummies: every run logs an easy-to-read trail.</text><path class="arrow" d="M610 210 Q 695 210 780 180" /><rect class="panel" fill-opacity="0.6" height="150" rx="14" ry="14" width="240" x="640" y="110" /><text class="step-label" x="655" y="140">STEP 4 — DETAILS VIEW</text><text class="text" x="655" y="165">Raw counts saved</text><text class="text" x="655" y="188">Provider backend tagged</text><text class="text" x="655" y="211">error_code + action_hint</text><text class="helper" x="655" y="233">For dummies: click in to see what actually happened.</text><path class="arrow" d="M760 260 V 320" /><rect class="panel" fill-opacity="0.6" height="150" rx="14" ry="14" width="240" x="640" y="320" /><text class="step-label" x="655" y="350">STEP 5 — CACHED STATE</text><text class="text" x="655" y="375">KPIs + history stay cached</text><text class="text" x="655" y="398">Even after refresh</text><text class="text" x="655" y="421">Seeded experiments keep table warm</text><text class="helper" x="655" y="443">For dummies: refresh-safe data means fewer waits.</text></svg>
+<svg aria-label="SynQc demo walkthrough" height="540" role="img" viewBox="0 0 960 540" width="960">
+  <style>
+    :root {
+      --bg-height: 540px;
+      --bg-width: 960px;
+      --page-padding: 30px;
+      --panel-radius: 14px;
+      --panel-stroke: 2;
+      --panel-wide: 900px;
+      --content-y: 120px;
+      --content-pad: 15px;
+      --col-left-x: 60px;
+      --col-mid-x: 340px;
+      --col-right-x: 600px;
+      --left-width: 200px;
+      --mid-width: 360px;
+      --right-width: 320px;
+      --helper-line: 16px;
+      --badge-width: 170px;
+      --badge-height: 44px;
+      --kpi-width: 115px;
+    }
+
+    .panel { fill: #0b1021; stroke: #3ad5ff; stroke-width: var(--panel-stroke); }
+    .title { fill: #e8f7ff; font-family: 'Segoe UI', sans-serif; font-size: 22px; font-weight: 800; letter-spacing: 0.3px; }
+    .subtitle { fill: #9ffcff; font-family: 'Segoe UI', sans-serif; font-size: 14px; font-weight: 600; }
+    .text { fill: #d9e6ff; font-family: 'Segoe UI', sans-serif; font-size: 16px; }
+    .kpi { fill: #111a33; stroke: #9ffcff; stroke-width: 1.5; }
+    .kpi-label { fill: #9ffcff; font-family: 'Segoe UI', sans-serif; font-size: 14px; }
+    .kpi-value { fill: #ffffff; font-family: 'Consolas', monospace; font-size: 18px; font-weight: 700; }
+    .badge { fill: #1e2a4d; stroke: #f9d15c; stroke-width: 1; }
+    .badge-text { fill: #f9d15c; font-family: 'Segoe UI', sans-serif; font-size: 14px; font-weight: 700; }
+    .arrow { stroke: #6ed2f0; stroke-width: 3; marker-end: url(#arrowhead); filter: url(#glow); opacity: 0.76; }
+    .step-label { fill: #f9d15c; font-family: 'Segoe UI', sans-serif; font-size: 14px; font-weight: 700; letter-spacing: 0.5px; }
+    .helper { fill: #cbe2ff; font-family: 'Segoe UI', sans-serif; font-size: 13px; font-style: italic; line-height: var(--helper-line); }
+  </style>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#060b1a" />
+      <stop offset="100%" stop-color="#0c1f36" />
+    </linearGradient>
+    <marker id="arrowhead" markerHeight="8" markerWidth="12" orient="auto" refX="10" refY="4">
+      <polygon fill="#6ed2f0" points="0 0, 12 4, 0 8" />
+    </marker>
+    <filter height="140%" id="glow" width="140%" x="-20%" y="-20%">
+      <feGaussianBlur result="blur" stdDeviation="0.9" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+  <rect fill="url(#bg)" height="var(--bg-height)" width="var(--bg-width)" />
+  <rect class="panel" fill-opacity="0.82" height="480" rx="16" ry="16" width="var(--panel-wide)" x="var(--page-padding)" y="var(--page-padding)" />
+  <text class="title" x="calc(var(--page-padding) + var(--content-pad))" y="70">SynQc preset demo (simulator)</text>
+  <text class="subtitle" x="calc(var(--page-padding) + var(--content-pad))" y="92">Follow the flow arrows to see what updates when a preset runs</text>
+
+  <rect class="panel" fill-opacity="0.58" height="320" rx="var(--panel-radius)" ry="var(--panel-radius)" width="var(--left-width)" x="var(--col-left-x)" y="var(--content-y)" />
+  <text class="step-label" x="calc(var(--col-left-x) + var(--content-pad))" y="150">STEP 1 — SELECT &amp; RUN</text>
+  <text class="text" x="calc(var(--col-left-x) + var(--content-pad))" y="175">Choose preset</text>
+  <text class="helper" x="calc(var(--col-left-x) + var(--content-pad))" y="193">For dummies: pick the experiment to try.</text>
+  <rect class="badge" height="var(--badge-height)" rx="10" ry="10" width="var(--badge-width)" x="calc(var(--col-left-x) + var(--content-pad))" y="208" />
+  <text class="badge-text" x="calc(var(--col-left-x) + 30px)" y="217">Hello Quantum (Sim)</text>
+  <rect class="badge" height="var(--badge-height)" rx="10" ry="10" stroke="#3ad5ff" width="var(--badge-width)" x="calc(var(--col-left-x) + var(--content-pad))" y="266" />
+  <text class="badge-text" x="calc(var(--col-left-x) + 53px)" y="293">Run preset ▶</text>
+  <text class="text" x="calc(var(--col-left-x) + var(--content-pad))" y="308">GPU/CPU ready</text>
+  <text class="text" x="calc(var(--col-left-x) + var(--content-pad))" y="338">Simulator max shots</text>
+  <text class="text" x="calc(var(--col-left-x) + var(--content-pad))" y="368">Queue depth: inline</text>
+  <path class="arrow" d="M calc(var(--col-left-x) + var(--left-width)) 250 H var(--col-mid-x)" />
+
+  <rect class="panel" fill-opacity="0.6" height="160" rx="var(--panel-radius)" ry="var(--panel-radius)" width="var(--mid-width)" x="var(--col-mid-x)" y="var(--content-y)" />
+  <text class="step-label" x="calc(var(--col-mid-x) + var(--content-pad))" y="150">STEP 2 — LIVE KPIs</text>
+  <text class="text" x="calc(var(--col-mid-x) + var(--content-pad))" y="175">KPIs update as the preset runs</text>
+  <text class="helper" x="calc(var(--col-mid-x) + var(--content-pad))" y="189">For dummies: watch the numbers rise and fall.</text>
+  <rect class="kpi" height="75" rx="12" ry="12" width="var(--kpi-width)" x="calc(var(--col-mid-x) + var(--content-pad))" y="205" />
+  <text class="kpi-label" x="calc(var(--col-mid-x) + var(--content-pad) + 10px)" y="221">Fidelity</text>
+  <text class="kpi-value" x="calc(var(--col-mid-x) + var(--content-pad) + 10px)" y="243">99.2%</text>
+  <rect class="kpi" height="75" rx="12" ry="12" width="var(--kpi-width)" x="calc(var(--col-mid-x) + var(--content-pad) + 130px)" y="205" />
+  <text class="kpi-label" x="calc(var(--col-mid-x) + var(--content-pad) + 140px)" y="221">Latency</text>
+  <text class="kpi-value" x="calc(var(--col-mid-x) + var(--content-pad) + 140px)" y="243">128 ms</text>
+  <path class="arrow" d="M var(--col-mid-x) 290 V 345" />
+
+  <rect class="panel" fill-opacity="0.6" height="120" rx="var(--panel-radius)" ry="var(--panel-radius)" width="var(--mid-width)" x="var(--col-mid-x)" y="345" />
+  <text class="step-label" x="calc(var(--col-mid-x) + var(--content-pad))" y="375">STEP 3 — HISTORY</text>
+  <text class="text" x="calc(var(--col-mid-x) + var(--content-pad))" y="402">#1420  • preset=Hello Quantum • sim_local</text>
+  <text class="text" x="calc(var(--col-mid-x) + var(--content-pad))" y="425">#1421  • preset=Hello Quantum • kpis saved</text>
+  <text class="text" x="calc(var(--col-mid-x) + var(--content-pad))" y="448">#1422  • preset=Hello Quantum • artifacts ✓</text>
+  <text class="helper" x="calc(var(--col-mid-x) + var(--content-pad))" y="468">
+    <tspan x="calc(var(--col-mid-x) + var(--content-pad))" dy="0">For dummies: every run logs</tspan>
+    <tspan x="calc(var(--col-mid-x) + var(--content-pad))" dy="var(--helper-line)">an easy-to-read trail.</tspan>
+  </text>
+
+  <path class="arrow" d="M610 210 Q 695 210 780 180" />
+  <rect class="panel" fill-opacity="0.6" height="150" rx="var(--panel-radius)" ry="var(--panel-radius)" width="var(--right-width)" x="var(--col-right-x)" y="110" />
+  <text class="step-label" x="calc(var(--col-right-x) + var(--content-pad))" y="140">STEP 4 — DETAILS VIEW</text>
+  <text class="text" x="calc(var(--col-right-x) + var(--content-pad))" y="165">Raw counts saved</text>
+  <text class="text" x="calc(var(--col-right-x) + var(--content-pad))" y="188">Provider backend tagged</text>
+  <text class="text" x="calc(var(--col-right-x) + var(--content-pad))" y="211">error_code + action_hint</text>
+  <text class="helper" x="calc(var(--col-right-x) + var(--content-pad))" y="236">
+    <tspan x="calc(var(--col-right-x) + var(--content-pad))" dy="0">For dummies: click in</tspan>
+    <tspan x="calc(var(--col-right-x) + var(--content-pad))" dy="var(--helper-line)">to see what actually happened.</tspan>
+  </text>
+
+  <path class="arrow" d="M760 260 V 320" />
+  <rect class="panel" fill-opacity="0.6" height="150" rx="var(--panel-radius)" ry="var(--panel-radius)" width="var(--right-width)" x="var(--col-right-x)" y="320" />
+  <text class="step-label" x="calc(var(--col-right-x) + var(--content-pad))" y="350">STEP 5 — CACHED STATE</text>
+  <text class="text" x="calc(var(--col-right-x) + var(--content-pad))" y="375">KPIs + history stay cached</text>
+  <text class="text" x="calc(var(--col-right-x) + var(--content-pad))" y="398">Even after refresh</text>
+  <text class="text" x="calc(var(--col-right-x) + var(--content-pad))" y="421">Seeded experiments keep table warm</text>
+  <text class="helper" x="calc(var(--col-right-x) + var(--content-pad))" y="446">
+    <tspan x="calc(var(--col-right-x) + var(--content-pad))" dy="0">For dummies: refresh-safe data</tspan>
+    <tspan x="calc(var(--col-right-x) + var(--content-pad))" dy="var(--helper-line)">means fewer waits.</tspan>
+  </text>
+</svg>
