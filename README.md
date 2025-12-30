@@ -216,6 +216,15 @@ SYNQC_API_KEY=local-dev-key \  # optional, only when API keys are required
 python backend/scripts/quickstart_health_check.py
 ```
 
+To rebuild the web image and confirm the frontend can reach the backend through nginx, run:
+
+```bash
+scripts/verify_web_proxy.sh
+```
+
+> **Prerequisite:** The helper expects a working Docker CLI with the compose plugin (or Docker Desktop). If package mirrors are blocked by a proxy, install Docker using a whitelisted mirror or ask an administrator to provide the binaries before rerunning the script.
+> See `docs/docker_installation_blockers.md` for the exact 403 errors observed in this environment and options to resolve them.
+
 Then open:
 
 - Frontend: http://127.0.0.1:8080/
