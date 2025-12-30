@@ -44,7 +44,15 @@
       .particle { fill: #c8e9ff; opacity: 0.5; animation: twinkle 3.5s ease-in-out infinite; }
       .timeline { stroke: #27314f; stroke-width: 2; stroke-linecap: round; }
       .timeline-dot { fill: url(#accent); animation: pulse 2.3s ease-in-out infinite; }
-      .caption { font: 600 12px "Segoe UI", system-ui; fill: #cdd7ff; letter-spacing: 0.05em; }
+      .caption {
+        font: 600 12px "Segoe UI", system-ui;
+        fill: #cdd7ff;
+        letter-spacing: 0.05em;
+        stroke: rgba(5, 6, 14, 0.7);
+        stroke-width: 3;
+        stroke-linejoin: round;
+        paint-order: stroke fill;
+      }
       .kpi { font: 700 32px "Segoe UI", system-ui; fill: #6ae5ff; }
       .kpi-label { font: 600 13px "Segoe UI", system-ui; fill: #a6acd3; }
       .badge { font: 700 12px "Segoe UI", system-ui; fill: #05060e; }
@@ -135,10 +143,10 @@
   <path d="M820 320 C 900 280, 960 230, 1040 210" class="accent-line" style="animation-delay:1.4s" />
   <path d="M740 420 C 690 460, 540 460, 400 420" class="accent-line" style="animation-delay:0.9s" />
 
-  <text x="344" y="130" class="caption">UI → API</text>
-  <text x="804" y="130" class="caption">API → Providers</text>
-  <text x="360" y="278" class="caption">Queue buffers work</text>
-  <text x="672" y="278" class="caption">Worker writes results</text>
-  <text x="896" y="298" class="caption">Provider returns payload</text>
-  <text x="504" y="456" class="caption">Store hydrates UI tables</text>
+  <text x="344" y="110" class="caption">UI → API</text>
+  <text x="804" y="110" class="caption">API → Providers</text>
+  <text x="316" y="248" class="caption">Queue buffers work</text>
+  <text x="720" y="246" class="caption">Worker writes results</text>
+  <text x="936" y="258" class="caption">Provider returns payload</text>
+  <text x="520" y="480" class="caption">Store hydrates UI tables</text>
 </svg>
