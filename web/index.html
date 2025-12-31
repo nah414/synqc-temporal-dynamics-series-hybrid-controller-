@@ -2080,15 +2080,16 @@
 
     // Better default API base when served via nginx reverse proxy:
     // - If ?api= is set, respect it.
-    // - Else if http(s), use same-origin /api.
-    // - Else (file://), fallback to localhost backend.
+    // - Else if http(s), use same-origin /api (e.g., http://127.0.0.1:8080/api).
+    // - Else (file://), fallback to the proxied web host so Docker + Redis work OOTB.
     const params = new URLSearchParams(window.location.search);
     const apiOverride = params.get("api");
 
     const isHttp = window.location.protocol === "http:" || window.location.protocol === "https:";
     const API_BASE = apiOverride
       ? apiOverride.replace(/\/+$/, "")
-      : (isHttp ? `${window.location.origin}/api` : "http://localhost:8001");
+      : (isHttp ? `${window.location.origin}/api` : "http://127.0.0.1:8080/api");
+    const HEALTH_PING_TIMEOUT_MS = 3500;
 
     // Supports BOTH:
     //  - X-Api-Key: <value>   (query param: ?api_key=... or ?key=...)
@@ -2315,6 +2316,38 @@
       if (!runAlert) return;
       if (runAlertText) runAlertText.textContent = message;
       runAlert.style.display = 'flex';
+    }
+
+    async function preflightHealthCheck(timeoutMs = HEALTH_PING_TIMEOUT_MS) {
+      setRunStatus(`Checking backend at ${API_BASE}…`);
+
+      const controller = ('AbortController' in window) ? new AbortController() : null;
+      let timer = null;
+      if (controller && Number.isFinite(timeoutMs) && timeoutMs > 0) {
+        timer = setTimeout(() => controller.abort(), timeoutMs);
+      }
+
+      try {
+        const res = await synqcApiFetch('/health', {
+          method: 'GET',
+          headers: authHeaders(),
+          signal: controller?.signal,
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const health = await res.json();
+
+        renderHealthSummary(health);
+        setRunStatus(`Backend: connected (${API_BASE}) · env=${health.env ?? 'unknown'} · version=${health.version ?? 'n/a'}`);
+        return health;
+      } catch (err) {
+        const reason = err?.name === 'AbortError' ? 'timed out' : (err?.message || 'request failed');
+        showRunAlert(`Backend not reachable at ${API_BASE} (${reason}). Start docker-compose on 127.0.0.1:8080 or override with ?api=...`);
+        renderHealthSummary(null);
+        setRunStatus(`Backend: not reachable (${API_BASE}). Start it and refresh.`);
+        throw err;
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
     }
 
     function renderHealthSummary(health) {
@@ -4004,9 +4037,10 @@
     // --------------------------------------------
     // Backend refresh + render
     // --------------------------------------------
-    async function refreshFromBackend() {
+    async function refreshFromBackend(options = {}) {
+      const initialHealth = options?.initialHealth || null;
       try {
-        const h = await apiGet('/health');
+        const h = initialHealth || await apiGet('/health');
         healthCache = h;
         failureByTarget = (h?.queue?.failures_by_target) || {};
 
@@ -4424,8 +4458,10 @@
     primeWorkflowFromRun(lastRun);
     startQubitDemo();
     initShorPanel();
-    refreshFromBackend();
-    updateInterpretationText();
+    preflightHealthCheck()
+      .then((health) => refreshFromBackend({ initialHealth: health }))
+      .catch(() => refreshFromBackend())
+      .finally(() => updateInterpretationText());
   </script>
 </body>
 </html>
