@@ -193,6 +193,8 @@ export SYNQC_ALLOWED_ORIGINS=http://localhost:8080,https://demo.example.com
 
 If the variable is unset or empty, cross-origin requests are rejected (same-origin requests still work when the UI and API are served together).
 
+Cookie-based auth flows can be toggled with `SYNQC_CORS_ALLOW_CREDENTIALS` (default: `false`). Set it to `true` only when you control the requesting origin and need browsers to send cookies on cross-origin requests.
+
 ### Quickstart health script
 
 Run a one-liner smoke test that pings `/health`, verifies Redis connectivity when configured, submits a simulator preset, and waits for it to complete:

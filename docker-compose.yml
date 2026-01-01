@@ -18,6 +18,8 @@ services:
       UVICORN_WORKERS: ${UVICORN_WORKERS:-1}
       SYNQC_REDIS_URL: ${SYNQC_REDIS_URL:-redis://redis:6379/0}
       SYNQC_HEALTH_CACHE_TTL_SECONDS: ${SYNQC_HEALTH_CACHE_TTL_SECONDS:-3}
+      SYNQC_ALLOWED_ORIGINS: "*"
+      SYNQC_CORS_ALLOW_CREDENTIALS: "false"
     depends_on:
       redis:
         condition: service_healthy
