@@ -613,6 +613,7 @@ def _enqueue_run(req: RunExperimentRequest, session_id: str) -> RunSubmissionRes
             "hardware_target": req.hardware_target,
             "session_id": session_id,
             "preset": req.preset.value if req.preset else None,
+            "mode": req.mode or "explore",
         },
     )
     return RunSubmissionResponse(

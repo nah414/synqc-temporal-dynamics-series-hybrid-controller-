@@ -176,6 +176,10 @@ class RunExperimentRequest(BaseModel):
         default=None,
         description="Optional manual control profile to apply for this run.",
     )
+    mode: Optional[str] = Field(
+        default="explore",
+        description="Execution mode: 'explore', 'calibrate', or 'prod'. Affects guardrails and behavior."
+    )
 
 
 class KpiDetail(BaseModel):

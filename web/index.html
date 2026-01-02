@@ -155,6 +155,31 @@
       background: linear-gradient(to right, #6ae5ff, #ffdd6e);
       color: #050412; font-weight: 600;
     }
+    .mode-banner {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 0.6rem 1rem;
+      margin-bottom: 1rem;
+      border-radius: 12px;
+      border: 1px solid var(--border-subtle);
+      background: linear-gradient(135deg, rgba(106,229,255,0.15), rgba(255,221,110,0.15));
+      font-size: 0.85rem;
+      transition: all 0.3s ease;
+    }
+    .mode-banner-icon {
+      font-size: 1.2rem;
+      filter: drop-shadow(0 0 8px rgba(106,229,255,0.6));
+    }
+    .mode-banner-text {
+      flex: 1;
+      color: var(--text-main);
+    }
+    .mode-banner-text strong {
+      color: var(--accent-strong);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
     .avatar {
       width: 28px; height: 28px; border-radius: 999px;
       display: inline-flex; align-items: center; justify-content: center;
@@ -1244,6 +1269,10 @@
 
     <main>
       <div class="view active" id="view-console">
+        <div class="mode-banner" id="modeBanner">
+          <span class="mode-banner-icon">🎯</span>
+          <span class="mode-banner-text">Mode: <strong id="modeBannerMode">Explore</strong> — Experimental features enabled, guardrails relaxed</span>
+        </div>
         <div class="console-grid">
 <section class="panel panel-agent">
         <div class="panel-header">
@@ -1942,28 +1971,73 @@
     })();
 
     // --------------------------------------------
-    // Mode pills with functionality
+    // Mode pills with full functionality
     // --------------------------------------------
     let currentMode = 'explore';
     
+    const modeConfig = {
+      explore: {
+        label: 'Explore',
+        icon: '🎯',
+        description: 'Experimental features enabled, guardrails relaxed',
+        hueShift: '0deg',
+        opacity: '1'
+      },
+      calibrate: {
+        label: 'Calibrate',
+        icon: '⚙️',
+        description: 'Precision mode for hardware characterization and tuning',
+        hueShift: '45deg',
+        opacity: '1'
+      },
+      prod: {
+        label: 'Production',
+        icon: '🔒',
+        description: 'Production mode with full guardrails and safety limits',
+        hueShift: '-30deg',
+        opacity: '0.95'
+      }
+    };
+    
     function setMode(mode) {
       currentMode = mode;
+      const config = modeConfig[mode];
+      if (!config) return;
+      
       const root = document.documentElement;
       
-      // Update visual theme based on mode
-      if (mode === 'explore') {
-        root.style.setProperty('--spectral-shift', '0deg');
-        document.body.style.opacity = '1';
-      } else if (mode === 'calibrate') {
-        root.style.setProperty('--spectral-shift', '45deg');
-        document.body.style.opacity = '1';
-      } else if (mode === 'prod') {
-        root.style.setProperty('--spectral-shift', '-30deg');
-        document.body.style.opacity = '0.95';
+      // Update visual theme
+      root.style.setProperty('--spectral-shift', config.hueShift);
+      document.body.style.opacity = config.opacity;
+      
+      // Update mode banner
+      const modeBanner = document.getElementById('modeBanner');
+      const modeBannerIcon = modeBanner?.querySelector('.mode-banner-icon');
+      const modeBannerMode = document.getElementById('modeBannerMode');
+      const modeBannerText = modeBanner?.querySelector('.mode-banner-text');
+      
+      if (modeBannerIcon) modeBannerIcon.textContent = config.icon;
+      if (modeBannerMode) modeBannerMode.textContent = config.label;
+      if (modeBannerText) {
+        modeBannerText.innerHTML = `Mode: <strong id="modeBannerMode">${config.label}</strong> — ${config.description}`;
       }
       
-      // Log mode change for debugging
-      console.log(`Mode changed to: ${mode}`);
+      // Update banner styling based on mode
+      if (modeBanner) {
+        if (mode === 'explore') {
+          modeBanner.style.background = 'linear-gradient(135deg, rgba(106,229,255,0.15), rgba(255,221,110,0.15))';
+          modeBanner.style.borderColor = 'rgba(106,229,255,0.3)';
+        } else if (mode === 'calibrate') {
+          modeBanner.style.background = 'linear-gradient(135deg, rgba(255,179,71,0.15), rgba(255,221,110,0.15))';
+          modeBanner.style.borderColor = 'rgba(255,179,71,0.3)';
+        } else if (mode === 'prod') {
+          modeBanner.style.background = 'linear-gradient(135deg, rgba(46,204,113,0.15), rgba(106,229,255,0.15))';
+          modeBanner.style.borderColor = 'rgba(46,204,113,0.3)';
+        }
+      }
+      
+      // Log mode change
+      console.log(`Mode changed to: ${mode}`, config);
     }
     
     document.querySelectorAll('.mode-pill').forEach(btn => {
@@ -4437,7 +4511,14 @@
       setRunStatus('Running preset…');
 
       try {
-        const run = await apiPost('/experiments/run', { preset, hardware_target, shot_budget, notes, control_overrides });
+        const run = await apiPost('/experiments/run', { 
+          preset, 
+          hardware_target, 
+          shot_budget, 
+          notes, 
+          control_overrides,
+          mode: currentMode 
+        });
         lastRun = run;
 
         // Update labels

@@ -67,6 +67,10 @@ class FactorRequest(BaseModel):
         None,
         description="Dotted path or module:Class for provider instantiation (backend_mode=custom).",
     )
+    mode: Optional[str] = Field(
+        "explore",
+        description="Execution mode: 'explore', 'calibrate', or 'prod'. Affects guardrails and behavior."
+    )
 
 
 class FactorResponse(BaseModel):
@@ -82,6 +86,10 @@ class FactorResponse(BaseModel):
 class RSAKeyGenRequest(BaseModel):
     bits: int = Field(SYNQC_SHOR_DEFAULT_KEY_BITS, ge=4, le=32, description="Bit-length for each prime (guard-railed by default).")  # noqa: E501
     e: int = Field(SYNQC_SHOR_DEFAULT_E, ge=3, description="Public exponent.")
+    mode: Optional[str] = Field(
+        "explore",
+        description="Execution mode: 'explore', 'calibrate', or 'prod'."
+    )
 
 
 class RSAKeyGenResponse(BaseModel):
