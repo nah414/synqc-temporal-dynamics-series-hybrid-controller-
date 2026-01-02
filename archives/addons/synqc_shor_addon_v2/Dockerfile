@@ -18,4 +18,4 @@ RUN pip install --no-cache-dir \
 EXPOSE 8002
 
 # Run the application
-CMD ["uvicorn", "run_demo_app:app", "--host", "0.0.0.0", "--port", "8002", "--reload"]
+CMD ["uvicorn", "run_demo_app:app", "--host", "0.0.0.0", "--port", "8002"]
