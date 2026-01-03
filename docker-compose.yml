@@ -20,6 +20,7 @@ services:
       SYNQC_HEALTH_CACHE_TTL_SECONDS: ${SYNQC_HEALTH_CACHE_TTL_SECONDS:-3}
       SYNQC_ALLOWED_ORIGINS: "*"
       SYNQC_CORS_ALLOW_CREDENTIALS: "false"
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
     depends_on:
       redis:
         condition: service_healthy
@@ -48,6 +49,7 @@ services:
       SYNQC_REDIS_URL: ${SYNQC_REDIS_URL:-redis://redis:6379/0}
       SYNQC_HEALTH_CACHE_TTL_SECONDS: ${SYNQC_HEALTH_CACHE_TTL_SECONDS:-3}
       SYNQC_REQUIRE_API_KEY: "false"
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
     depends_on:
       redis:
         condition: service_healthy

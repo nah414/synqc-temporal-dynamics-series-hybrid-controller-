@@ -12,7 +12,7 @@ from .config import settings
 from .control_profiles import ControlProfileStore
 from .engine import BudgetExceeded, SynQcEngine
 from .logging_utils import configure_json_logging, get_logger, log_context
-from .metrics import MetricsExporter, shared_prometheus_registry
+from .metrics import MetricsExporter, MetricsExporterGuard, shared_prometheus_registry
 from .metrics_recorder import run_metrics
 from .models import ErrorCode, ExperimentPreset
 from .agents.multicall import run_multicall_agent
@@ -206,8 +206,16 @@ def main() -> None:
     worker_metrics_exporter = build_worker_metrics_exporter(
         engine._budget_tracker, queue
     )
+    worker_metrics_guard = None
     if worker_metrics_exporter:
         worker_metrics_exporter.start()
+        worker_metrics_guard = MetricsExporterGuard(
+            lambda: build_worker_metrics_exporter(engine._budget_tracker, queue),
+            check_interval_seconds=settings.metrics_guard_check_interval_seconds,
+            restart_backoff_seconds=settings.metrics_guard_restart_backoff_seconds,
+            initial_exporter=worker_metrics_exporter,
+        )
+        worker_metrics_guard.start()
 
     logger.info("synqc-worker ready", extra={"redis_url": settings.redis_url, "max_workers": settings.worker_pool_size})
     try:

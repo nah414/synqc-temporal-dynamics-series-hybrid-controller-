@@ -17,6 +17,7 @@ services:
       SYNQC_REQUIRE_API_KEY: "false"
       # Optional defense-in-depth (middleware you can wire into FastAPI):
       SYNQC_REQUIRE_EDGE_IDENTITY: "${SYNQC_REQUIRE_EDGE_IDENTITY:-false}"
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
     depends_on:
       redis:
         condition: service_healthy
@@ -37,6 +38,7 @@ services:
       REDIS_URL: "redis://redis:6379/0"
       REDIS_EVENTS_CHANNEL: "synqc:events"
       SYNQC_REQUIRE_API_KEY: "false"
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
     depends_on:
       redis:
         condition: service_healthy

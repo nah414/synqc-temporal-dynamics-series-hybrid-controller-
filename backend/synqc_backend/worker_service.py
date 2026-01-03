@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import os
 import socket
 import time
@@ -129,8 +130,16 @@ def main() -> None:
     worker_id = os.environ.get("SYNQC_WORKER_ID") or f"{socket.gethostname()}-{os.getpid()}"
     job_timeout_seconds = _env_int("SYNQC_JOB_TIMEOUT_SECONDS", 60)
 
+    logger = logging.getLogger(__name__)
+    logging.basicConfig(level=logging.INFO)
+
     while True:
-        did = process_one(args.queue, worker_id, job_timeout_seconds=job_timeout_seconds)
+        try:
+            did = process_one(args.queue, worker_id, job_timeout_seconds=job_timeout_seconds)
+        except Exception:
+            logger.exception("worker loop crashed; continuing after backoff")
+            time.sleep(1.0)
+            continue
         if not did:
             time.sleep(0.2)
 

@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import logging
 import threading
-from typing import Optional
+from time import monotonic
+from typing import Callable, Optional
 
 from prometheus_client import CollectorRegistry, Counter, Gauge, start_http_server
 
@@ -133,6 +134,10 @@ class MetricsExporter:
             "synqc_metrics_collection_errors_total",
             "Total errors while collecting and exporting metrics",
         )
+
+    @property
+    def is_running(self) -> bool:
+        return bool(self._thread and self._thread.is_alive())
 
     @property
     def registry(self) -> CollectorRegistry:
@@ -284,3 +289,76 @@ class MetricsExporter:
             self._provider_simulated.labels(hardware_target=target).set(0)
 
         self._provider_seen_targets = self._provider_seen_targets | current_targets
+
+
+class MetricsExporterGuard:
+    """Background sentinel to rehydrate metrics exporters that go missing."""
+
+    def __init__(
+        self,
+        builder: Callable[[], MetricsExporter | None],
+        *,
+        check_interval_seconds: int = 60,
+        restart_backoff_seconds: int = 180,
+        initial_exporter: MetricsExporter | None = None,
+    ) -> None:
+        self._builder = builder
+        self._check_interval = max(0.1, float(check_interval_seconds))
+        self._restart_backoff = max(0.0, float(restart_backoff_seconds))
+        self._current_exporter = initial_exporter
+        self._stop_event = threading.Event()
+        self._thread: threading.Thread | None = None
+        self._last_attempt = 0.0
+        self._restart_count = 0
+
+    @property
+    def restart_count(self) -> int:
+        return self._restart_count
+
+    def start(self) -> None:
+        if self._thread and self._thread.is_alive():
+            return
+
+        self._thread = threading.Thread(
+            target=self._run, name="synqc-metrics-guard", daemon=True
+        )
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop_event.set()
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=2 * self._check_interval)
+
+    def ensure_running(self) -> MetricsExporter | None:
+        try:
+            if self._current_exporter and self._current_exporter.is_running:
+                return self._current_exporter
+
+            now = monotonic()
+            if now - self._last_attempt < self._restart_backoff:
+                return self._current_exporter
+
+            self._last_attempt = now
+            exporter = self._builder()
+            if exporter is None:
+                return self._current_exporter
+
+            exporter.start()
+            if exporter.is_running:
+                self._current_exporter = exporter
+                self._restart_count += 1
+                logger.info(
+                    "Metrics exporter guard restarted exporter",
+                    extra={
+                        "port": getattr(exporter, "_port", None),
+                        "restart_count": self._restart_count,
+                    },
+                )
+            return self._current_exporter
+        except Exception:
+            logger.exception("Metrics exporter guard failed to restore exporter")
+            return self._current_exporter
+
+    def _run(self) -> None:
+        while not self._stop_event.wait(self._check_interval):
+            self.ensure_running()

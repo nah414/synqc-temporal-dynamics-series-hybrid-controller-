@@ -95,6 +95,16 @@ class SynQcSettings(BaseSettings):
             " consolidated scraping across processes"
         ),
     )
+    metrics_guard_check_interval_seconds: int = Field(
+        default=60,
+        ge=1,
+        description="Cadence for verifying metrics exporters are still running",
+    )
+    metrics_guard_restart_backoff_seconds: int = Field(
+        default=180,
+        ge=1,
+        description="Minimum time between exporter restart attempts",
+    )
     health_cache_ttl_seconds: int = Field(default=3, ge=0)
 
     # Legacy auth/db knobs
@@ -111,6 +121,13 @@ class SynQcSettings(BaseSettings):
 
     # Provider simulation toggle
     allow_provider_simulation: bool = Field(default=False)
+
+    # Agent chat (OpenAI proxy)
+    openai_api_key: str | None = Field(default=None, description="API key for OpenAI-powered agent chat")
+    openai_base_url: str = Field(default="https://api.openai.com/v1", description="Base URL for OpenAI-compatible API")
+    openai_model: str = Field(default="gpt-4o-mini", description="Model to use for agent chat completions")
+    agent_chat_limit_requests: int = Field(default=10, ge=1, description="Max agent chat calls per window")
+    agent_chat_limit_window_seconds: int = Field(default=60, ge=1, description="Window (seconds) for agent chat rate limiting")
 
     def model_post_init(self, __context):
         if self.allowed_origins_raw is None:

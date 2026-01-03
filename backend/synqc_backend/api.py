@@ -5,14 +5,18 @@ import logging
 import secrets
 import gc
 import uuid
+import os
+from collections import defaultdict, deque
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
 from time import monotonic
-from typing import List, Optional
+from typing import List, Optional, Literal
 
+import httpx
 from fastapi import Depends, FastAPI, Header, HTTPException, status, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
 
 from synqc_backend.consumer_api import router as consumer_router
 from synqc_backend.middleware import add_default_middlewares
@@ -32,7 +36,7 @@ from .providers import validate_credentials as validate_provider_credentials
 from .physics_router import router as physics_router
 from .jobs import JobQueue
 from .run_queue import build_run_queue
-from .metrics import MetricsExporter, shared_prometheus_registry
+from .metrics import MetricsExporter, MetricsExporterGuard, shared_prometheus_registry
 from .models import (
     ExperimentPreset,
     ExperimentStatus,
@@ -54,9 +58,16 @@ from .logging_utils import configure_json_logging, log_context, set_log_context,
 from .metrics_recorder import provider_metrics, run_metrics
 from importlib import metadata
 
+SYSTEM_PRIME = (
+    "You are SynQc Guide, assisting with SynQc Temporal Dynamics (Drive→Probe→Drive). "
+    "Be concise, call out latency/backaction trade-offs, and map goals to presets "
+    "(health diagnostics, latency characterization, backend comparison, guided DPD)."
+)
 
 # Instantiate storage, budget tracker, engine, and queue
 configure_json_logging()
+logger = get_logger(__name__)
+startup_warnings: list[str] = []
 
 persist_path = Path("./synqc_experiments.json")
 store = ExperimentStore(max_entries=512, persist_path=persist_path)
@@ -83,13 +94,13 @@ _embedded_queue = JobQueue(
 )
 queue = build_run_queue(_embedded_queue)
 metrics_exporter = None
+metrics_guard = None
 shared_registry = None
 if settings.metrics_shared_registry_endpoint_enabled or settings.metrics_use_shared_registry:
     shared_registry = shared_prometheus_registry()
 
-if settings.enable_metrics:
-    registry = shared_registry if shared_registry is not None else None
-    metrics_exporter = MetricsExporter(
+def _build_metrics_exporter(registry):
+    return MetricsExporter(
         budget_tracker=budget_tracker,
         queue=queue,
         enabled=settings.enable_metrics,
@@ -98,10 +109,35 @@ if settings.enable_metrics:
         collection_interval_seconds=settings.metrics_collection_interval_seconds,
         registry=registry,
     )
-    metrics_exporter.start()
+
+
+def _start_metrics_exporter(registry):
+    try:
+        exporter = _build_metrics_exporter(registry)
+        exporter.start()
+        return exporter
+    except Exception as exc:
+        startup_warnings.append(
+            "Metrics exporter disabled (will keep API running): %s" % exc
+        )
+        logger.warning("metrics exporter failed to start; continuing without metrics", exc_info=True)
+        return None
+
+
+if settings.enable_metrics:
+    registry = shared_registry if shared_registry is not None else None
+    metrics_exporter = _start_metrics_exporter(registry)
+    metrics_guard = MetricsExporterGuard(
+        lambda: _build_metrics_exporter(registry),
+        check_interval_seconds=settings.metrics_guard_check_interval_seconds,
+        restart_backoff_seconds=settings.metrics_guard_restart_backoff_seconds,
+        initial_exporter=metrics_exporter,
+    )
+    metrics_guard.start()
 atexit.register(queue.shutdown, timeout=settings.job_graceful_shutdown_seconds)
 
-logger = get_logger(__name__)
+chat_rate_windows: dict[str, deque[float]] = defaultdict(deque)
+chat_rate_lock = Lock()
 
 
 def _seed_demo_runs() -> None:
@@ -290,6 +326,25 @@ def require_api_key(
     )
 
 
+class ChatTurn(BaseModel):
+    role: Literal["user", "assistant", "system"] = Field(..., description="Message role")
+    content: str = Field(..., description="Message content")
+
+
+class ChatRequest(BaseModel):
+    prompt: str = Field(..., description="Latest user prompt")
+    history: list[ChatTurn] = Field(default_factory=list, description="Rolling chat history")
+    preset: str | None = Field(default=None, description="UI-selected preset")
+    hardware: str | None = Field(default=None, description="UI-selected hardware target")
+    mode: str | None = Field(default=None, description="UI mode (explore/calibrate/prod)")
+
+
+class ChatResponse(BaseModel):
+    reply: str
+    model: str
+    usage: dict | None = None
+
+
 def get_session_id(
     x_session_id: str | None = Header(default=None),
     authorization: str | None = Header(default=None),
@@ -364,6 +419,16 @@ _HEALTH_CACHE_LOCK = Lock()
 @app.get("/health", tags=["meta"])
 async def health() -> dict:
     """Simple health check endpoint."""
+    warnings: list[str] = []
+
+    def _safe(label: str, default: object, func):
+        try:
+            return func()
+        except Exception as exc:  # pragma: no cover - defensive health path
+            warnings.append(f"{label} unavailable: {exc}")
+            logger.warning("health check skipped %s due to error", label, exc_info=True)
+            return default
+
     ttl_seconds = settings.health_cache_ttl_seconds
     if ttl_seconds > 0:
         now = monotonic()
@@ -386,27 +451,159 @@ async def health() -> dict:
         "redis_url": settings.redis_url,
         "worker_pool_size": settings.worker_pool_size,
         "cors_allow_origins": _cors_origins(),
+        "assistant": {
+            "openai_chat_ready": bool(settings.openai_api_key or os.getenv("OPENAI_API_KEY")),
+            "model": settings.openai_model,
+        },
         "metrics": {
             "enabled": settings.enable_metrics,
             "port": settings.metrics_port,
             "collection_interval_seconds": settings.metrics_collection_interval_seconds,
+            "guard": {
+                "check_interval_seconds": settings.metrics_guard_check_interval_seconds,
+                "restart_backoff_seconds": settings.metrics_guard_restart_backoff_seconds,
+                "restart_count": getattr(metrics_guard, "restart_count", 0),
+            },
         },
         "presets": [p.value for p in ExperimentPreset],
         "visible_target_count": len(list_provider_targets()),
-        "budget_tracker": budget_tracker.health_summary(),
-        "queue": queue.stats(),
-        "queue_connectivity": getattr(queue, "health", lambda: {})(),
-        "control_profile": control_store.get(),
-        "qubit_usage": qubit_tracker.health(),
-        "persistence": store.health_summary(),
-        "provider_metrics": provider_metrics.health_summary(),
+        "budget_tracker": _safe("budget", {}, budget_tracker.health_summary),
+        "queue": _safe("queue", {}, queue.stats),
+        "queue_connectivity": _safe("queue.health", {}, lambda: getattr(queue, "health", lambda: {})()),
+        "control_profile": _safe("control_profile", {}, control_store.get),
+        "qubit_usage": _safe("qubit_usage", {}, qubit_tracker.health),
+        "persistence": _safe("persistence", {}, store.health_summary),
+        "provider_metrics": _safe("provider_metrics", {}, provider_metrics.health_summary),
     }
-    payload["redis"] = await redis_ping()
+    if startup_warnings:
+        warnings.extend(startup_warnings)
+    try:
+        payload["redis"] = await redis_ping()
+    except Exception as exc:  # pragma: no cover - defensive health path
+        payload.setdefault("warnings", []).append("Redis ping failed; continuing without cache.")
+        payload["redis"] = {"ok": False, "error": str(exc)}
+    if warnings:
+        payload.setdefault("warnings", []).extend(warnings)
     if ttl_seconds > 0:
         with _HEALTH_CACHE_LOCK:
             _HEALTH_CACHE["payload"] = payload
             _HEALTH_CACHE["expires_at"] = monotonic() + ttl_seconds
     return payload
+
+
+async def _invoke_openai_chat(body: ChatRequest) -> ChatResponse:
+    api_key = settings.openai_api_key or os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "error_message": "OpenAI API key missing; set SYNQC_OPENAI_API_KEY or OPENAI_API_KEY.",
+                "error_code": ErrorCode.AUTH_REQUIRED.value,
+                "action_hint": "Export OPENAI_API_KEY for the api container or pass SYNQC_OPENAI_API_KEY.",
+            },
+        )
+
+    messages: list[dict[str, str]] = [{"role": "system", "content": SYSTEM_PRIME}]
+    context_bits: list[str] = []
+    if body.preset:
+        context_bits.append(f"Preset: {body.preset}")
+    if body.hardware:
+        context_bits.append(f"Hardware: {body.hardware}")
+    if body.mode:
+        context_bits.append(f"Mode: {body.mode}")
+    if context_bits:
+        messages.append({"role": "system", "content": "Context: " + " · ".join(context_bits)})
+
+    history = body.history[-6:]
+    for turn in history:
+        messages.append(turn.model_dump())
+    messages.append({"role": "user", "content": body.prompt})
+
+    payload = {
+        "model": settings.openai_model,
+        "messages": messages,
+        "temperature": 0.35,
+        "max_tokens": 400,
+    }
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+
+    base = settings.openai_base_url.rstrip("/") or "https://api.openai.com/v1"
+    url = f"{base}/chat/completions"
+
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(15.0)) as client:
+            resp = await client.post(url, json=payload, headers=headers)
+    except httpx.HTTPError as exc:  # pragma: no cover - network guard
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail={"error_message": f"OpenAI chat request failed: {exc}"},
+        ) from exc
+
+    if resp.status_code >= 400:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail={
+                "error_message": f"OpenAI chat error {resp.status_code}",
+                "error_detail": resp.json() if resp.headers.get("content-type", "").startswith("application/json") else resp.text,
+            },
+        )
+
+    data = resp.json()
+    reply = (
+        data.get("choices", [{}])[0]
+        .get("message", {})
+        .get("content", "")
+        .strip()
+    )
+    if not reply:
+        reply = "No reply returned from the model."
+
+    return ChatResponse(reply=reply, model=data.get("model", settings.openai_model), usage=data.get("usage"))
+
+
+def _enforce_chat_rate_limit(session_id: str) -> None:
+    """Guard the agent chat proxy with a sliding-window rate limit."""
+
+    window_seconds = settings.agent_chat_limit_window_seconds
+    max_requests = settings.agent_chat_limit_requests
+    now = monotonic()
+    cutoff = now - window_seconds
+
+    with chat_rate_lock:
+        window = chat_rate_windows[session_id]
+        while window and window[0] < cutoff:
+            window.popleft()
+        if len(window) >= max_requests:
+            retry_after = max(1, int(window[0] + window_seconds - now))
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail={
+                    "error_code": ErrorCode.RATE_LIMITED.value,
+                    "error_message": "Agent chat rate limit reached.",
+                    "error_detail": {
+                        "retry_after_seconds": retry_after,
+                        "limit": max_requests,
+                        "window_seconds": window_seconds,
+                    },
+                    "action_hint": f"Wait {retry_after} seconds before retrying.",
+                },
+                headers={"Retry-After": str(retry_after)},
+            )
+        window.append(now)
+
+
+@app.post("/agent/chat", response_model=ChatResponse, tags=["agent"])
+async def agent_chat(
+    body: ChatRequest,
+    session_id: str = Depends(get_session_id),
+    _: None = Depends(require_api_key),
+) -> ChatResponse:
+    _enforce_chat_rate_limit(session_id)
+    return await _invoke_openai_chat(body)
 
 
 @app.get("/controls/profile", response_model=ControlProfile, tags=["controls"])

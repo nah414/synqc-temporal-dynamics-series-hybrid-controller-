@@ -4,6 +4,10 @@
 
 set -e
 
+# Ensure we run from the repo root even if invoked from elsewhere (Git Bash friendliness)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
 echo "======================================"
 echo "SynQc Docker Compose Setup & Validation"
 echo "======================================"

@@ -39,6 +39,8 @@ UI → API → Queue → Provider → Store → UI
 ## Demo
 
 - docker compose up --build
+- export OPENAI_API_KEY=<your key> so the SynQc Guide can reach GPT-4o-mini (docker compose forwards it to the API and worker)
+- optional: set SYNQC_AGENT_CHAT_LIMIT_REQUESTS / SYNQC_AGENT_CHAT_LIMIT_WINDOW_SECONDS to cap agent chat traffic in noisy envs
 - open [`web/index.html`](web/index.html) (works offline; add `?api=http://localhost:8001` when the backend is running)
 - click “Run preset”
 - see KPIs + history + experiments table + details view

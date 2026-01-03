@@ -20,6 +20,12 @@
       --kpi-bad: #ff4d6a;
       --spectral-shift: 0deg;
       --hero-visual-max-width: 1200px;
+      --mobius-gradient-position: center 60%;
+      --mobius-image-position: center 72%;
+      --mobius-gradient-size: cover;
+      --mobius-size: 50%;
+      --particle-count: 30;
+      --light-particle-count: 28;
     }
     * { box-sizing: border-box; }
     body {
@@ -326,15 +332,16 @@
     .agent-body {
       flex: 1; display: flex; flex-direction: column; gap: 0.6rem; min-height: 220px;
     }
-    .agent-chat-log {
-      flex: 1; border-radius: 14px;
-      background: rgba(8,10,30,0.96);
-      border: 1px solid var(--border-subtle);
-      padding: 0.6rem 0.65rem;
-      font-size: 0.78rem;
-      display: flex; flex-direction: column; gap: 0.4rem;
-      overflow-y: auto;
-    }
+      .agent-chat-log {
+        flex: 1; border-radius: 14px;
+        background: rgba(8,10,30,0.96);
+        border: 1px solid var(--border-subtle);
+        padding: 0.6rem 0.65rem;
+        font-size: 0.78rem;
+        display: flex; flex-direction: column; gap: 0.4rem;
+        overflow-y: auto;
+        max-height: 260px;
+      }
     .msg { max-width: 100%; line-height: 1.35; white-space: pre-wrap; word-break: break-word; }
     .msg-user { color: #6ae5ff; }
     .msg-agent{ color: var(--text-soft); }
@@ -354,6 +361,73 @@
       background: linear-gradient(to right, #6ae5ff, #ffdd6e);
       color: #050412; font-weight: 600;
     }
+
+    .agent-backlog-controls {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+
+    .agent-backlog-btn {
+      border-radius: 10px;
+      border: 1px solid var(--border-subtle);
+      padding: 0.35rem 0.6rem;
+      font-size: 0.74rem;
+      cursor: pointer;
+      background: rgba(10, 13, 34, 0.8);
+      color: var(--text-soft);
+      transition: border-color 0.2s ease, color 0.2s ease;
+    }
+
+    .agent-backlog-btn:hover {
+      color: var(--text-main);
+      border-color: var(--accent);
+    }
+
+    .agent-backlog {
+      border-radius: 12px;
+      border: 1px dashed var(--border-subtle);
+      background: rgba(6, 8, 25, 0.7);
+      padding: 0.5rem 0.55rem;
+      display: none;
+      flex-direction: column;
+      gap: 0.35rem;
+      max-height: 150px;
+      overflow: auto;
+    }
+
+    .agent-backlog-list { display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.76rem; }
+
+    .agent-backlog .msg strong { color: var(--text-main); }
+
+    .toast-stack {
+      position: fixed;
+      right: 16px;
+      bottom: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 20;
+      max-width: 320px;
+      pointer-events: none;
+    }
+
+    .toast {
+      border-radius: 12px;
+      border: 1px solid var(--border-subtle);
+      background: rgba(7, 9, 24, 0.95);
+      padding: 10px 12px;
+      font-size: 0.82rem;
+      color: var(--text-main);
+      box-shadow: 0 14px 32px rgba(0, 0, 0, 0.45);
+      pointer-events: auto;
+      transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+
+    .toast[data-kind="warn"] { border-color: #ffb347; color: #ffd9a6; }
+    .toast[data-kind="error"] { border-color: #ff4d6a; color: #ffd1d9; }
+    .toast small { display: block; color: var(--text-soft); margin-top: 4px; font-size: 0.7rem; }
 
 .primary-btn {
   border-radius: 12px;
@@ -1237,9 +1311,10 @@
 </style>
 </head>
 <body>
-    <div class="app">
+  <div class="app">
       <div class="particle-layer spectralized" id="particleLayer"></div>
       <div class="background-layer" aria-hidden="true" id="backgroundLayer"></div>
+      <div class="toast-stack" id="toastStack" aria-live="polite" aria-atomic="true"></div>
 
     <header>
       <div class="brand">
@@ -1300,6 +1375,16 @@
               Examples: “Run a coherence health check”, “Measure latency”, “Compare this backend
               to the simulator”, or “Walk me through a full SynQc DPD example.”
             </div>
+          </div>
+
+          <div class="agent-backlog-controls">
+            <div class="panel-sub" id="agentChatStatus">Assistant ready.</div>
+            <button class="agent-backlog-btn" id="agentBacklogBtn" type="button">Load archived</button>
+          </div>
+
+          <div class="agent-backlog" id="agentBacklogDrawer">
+            <div class="panel-sub">Archived turns for this preset/back-end:</div>
+            <div class="agent-backlog-list" id="agentBacklogList"></div>
           </div>
 
           <div class="agent-input-row">
@@ -1898,12 +1983,19 @@
   </div>
 
   <script>
+    const rootStyles = getComputedStyle(document.documentElement);
+    function cssNumberVar(name, fallback) {
+      const raw = rootStyles.getPropertyValue(name);
+      const val = Number.parseFloat(raw);
+      return Number.isFinite(val) ? val : fallback;
+    }
+
     // --------------------------------------------
     // Visual particles
     // --------------------------------------------
     (function initParticles() {
       const layer = document.getElementById('particleLayer');
-      const count = 30;
+      const count = Math.max(0, Math.round(cssNumberVar('--particle-count', 30)));
       for (let i = 0; i < count; i++) {
         const p = document.createElement('div');
         p.className = 'particle';
@@ -1963,9 +2055,10 @@
           createLightParticle();
         }, (duration + delay) * 1000);
       }
-      
-      // Create initial batch of 20 particles
-      for (let i = 0; i < 20; i++) {
+
+      // Create initial batch of particles (slightly increased for richer effect)
+      const initialCount = Math.max(0, Math.round(cssNumberVar('--light-particle-count', 28)));
+      for (let i = 0; i < initialCount; i++) {
         createLightParticle();
       }
     })();
@@ -2123,6 +2216,11 @@
     // --------------------------------------------
     const agentInput = document.getElementById('agentInput');
     const agentSend = document.getElementById('agentSend');
+    const agentChatStatus = document.getElementById('agentChatStatus');
+    const agentBacklogDrawer = document.getElementById('agentBacklogDrawer');
+    const agentBacklogList = document.getElementById('agentBacklogList');
+    const agentBacklogBtn = document.getElementById('agentBacklogBtn');
+    const toastStack = document.getElementById('toastStack');
 
     const scenePresetLabel = document.getElementById('scenePresetLabel');
     const sceneHardwareLabel = document.getElementById('sceneHardwareLabel');
@@ -2237,6 +2335,10 @@
     const shorWorkspaceShots = document.getElementById('shorWorkspaceShots');
     const shorWorkspaceStatus = document.getElementById('shorWorkspaceStatus');
 
+    const CHAT_MAX_VISIBLE = 3;
+    const CHAT_BACKLOG_LIMIT = 25;
+    const agentChatHistory = [];
+
     // --------------------------------------------
     // Backend wiring
     // --------------------------------------------
@@ -2317,6 +2419,14 @@
       }
       if (window.SYNQC_API_KEY) return { 'X-Api-Key': window.SYNQC_API_KEY };
       return {};
+    }
+
+    function withAuthHeaders(options = {}) {
+      const opts = { ...options };
+      const baseHeaders = opts.headers || {};
+      opts.headers = { ...baseHeaders, ...authHeaders() };
+      opts.credentials = 'include';
+      return opts;
     }
 
     const SHOR_LIVE_ALLOW_QUERY_AUTH = Boolean(window.SHOR_LIVE_ALLOW_QUERY_AUTH);
@@ -2512,7 +2622,10 @@
       const url = `${base}/health`;
 
       const { done } = withTimeout(2500, async (signal) => {
-        const res = await fetch(url, { signal, cache: "no-store" });
+        const res = await fetch(url, withAuthHeaders({
+          signal,
+          cache: "no-store",
+        }));
         if (!res.ok) throw new Error(`HTTP ${res.status} from ${url}`);
         return res.json();
       });
@@ -2623,6 +2736,10 @@
           chip.textContent = 'Backend disconnected';
           healthBadges.appendChild(chip);
         }
+        if (agentChatStatus) {
+          agentChatStatus.textContent = 'Assistant offline until backend responds.';
+          agentChatStatus.dataset.state = 'warn';
+        }
         if (hardwareMeta) {
           hardwareMeta.textContent = 'Backend capability not loaded yet; check /health.';
         }
@@ -2672,17 +2789,29 @@
         addBadge(health.redis ? 'Redis reachable' : 'Redis unreachable', health.redis ? 'ok' : 'bad');
       }
 
-      if (health.require_api_key) {
-        const hasKey = Boolean(AUTH.bearer || window.SYNQC_API_KEY);
-        addBadge(hasKey ? 'API key supplied' : 'API key required', hasKey ? 'ok' : 'warn');
-        if (!hasKey) {
-          showRunAlert('Backend requires an API key. Add ?api_key=... or ?token=... to seed credentials.');
+        if (health.require_api_key) {
+          const hasKey = Boolean(AUTH.bearer || window.SYNQC_API_KEY);
+          addBadge(hasKey ? 'API key supplied' : 'API key required', hasKey ? 'ok' : 'warn');
+          if (!hasKey) {
+            showRunAlert('Backend requires an API key. Add ?api_key=... or ?token=... to seed credentials.');
+          }
         }
-      }
 
-      if (health.server_time) {
-        addBadge(`Server ${new Date(health.server_time).toLocaleString()}`);
-      }
+        if (health.assistant) {
+          const chatReady = health.assistant.openai_chat_ready;
+          const chatModel = health.assistant.model || 'gpt-4o-mini';
+          addBadge(chatReady ? `Agent chat: ${chatModel}` : 'Agent chat: missing OpenAI API key', chatReady ? 'ok' : 'warn');
+          if (agentChatStatus) {
+            agentChatStatus.textContent = chatReady
+              ? `Assistant ready via ${chatModel}`
+              : 'Assistant waiting for OpenAI API key.';
+            agentChatStatus.dataset.state = chatReady ? 'ok' : 'warn';
+          }
+        }
+
+        if (health.server_time) {
+          addBadge(`Server ${new Date(health.server_time).toLocaleString()}`);
+        }
 
       if (hardwareMeta) {
         const parts = [`Backend: ${API_BASE}`, `version=${version}`];
@@ -2697,13 +2826,7 @@
     }
 
     async function synqcApiFetch(path, opts = {}) {
-      const options = {...opts};
-      options.headers = {...(options.headers || {})};
-
-      if (window.SYNQC_API_KEY) options.headers["X-Api-Key"] = window.SYNQC_API_KEY;
-      if (AUTH.bearer) options.headers["Authorization"] = `Bearer ${AUTH.bearer}`;
-
-      options.credentials = "include";
+      const options = withAuthHeaders(opts);
       const start = performance.now();
       let res = await fetch(`${API_BASE}${path}`, options);
       updateLatencyOverlay(performance.now() - start);
@@ -3477,6 +3600,8 @@
       }
     }
 
+    let controlProfileLoaded = false;
+
     function collectControlPayload() {
       return {
         drive_bias: Number(driveBiasInput?.value || 1.0),
@@ -3502,8 +3627,10 @@
         const profile = await apiGet('/controls/profile');
         applyControlProfileToUi(profile);
         if (controlStatus) controlStatus.textContent = 'Loaded from backend.';
+        controlProfileLoaded = true;
       } catch (err) {
         if (controlStatus) controlStatus.textContent = `Could not load controls (${err.message})`;
+        controlProfileLoaded = false;
       }
     }
 
@@ -3515,6 +3642,7 @@
         const profile = await apiPost('/controls/profile', payload);
         applyControlProfileToUi(profile);
         if (controlStatus) controlStatus.textContent = 'Controls pinned to backend profile.';
+        controlProfileLoaded = true;
       } catch (err) {
         if (controlStatus) controlStatus.textContent = `Save failed: ${err.message}`;
       } finally {
@@ -4323,6 +4451,9 @@
         if (h?.control_profile) {
           applyControlProfileToUi(h.control_profile);
           if (controlStatus) controlStatus.textContent = 'Live control profile loaded from /health.';
+          controlProfileLoaded = true;
+        } else if (!controlProfileLoaded) {
+          await loadControlProfile();
         }
 
         setRunStatus(`Backend: connected (${API_BASE}) · env=${h.env ?? 'unknown'} · version=${h.version ?? 'n/a'} · targets=${h.visible_target_count ?? 'n/a'}`);
@@ -4631,8 +4762,144 @@
     }
 
     // --------------------------------------------
+    // Toasts & UX hints
+    // --------------------------------------------
+    function pushToast(message, kind = 'info', duration = 4200, subtext) {
+      if (!toastStack) return null;
+      const el = document.createElement('div');
+      el.className = 'toast';
+      el.dataset.kind = kind;
+      el.textContent = String(message || '');
+
+      let metaEl = null;
+      if (subtext) {
+        metaEl = document.createElement('small');
+        metaEl.textContent = String(subtext);
+        el.appendChild(metaEl);
+      }
+
+      toastStack.appendChild(el);
+
+      const lifetime = Math.max(1500, duration);
+      setTimeout(() => {
+        el.style.opacity = '0';
+        el.style.transform = 'translateY(6px)';
+      }, lifetime - 220);
+      setTimeout(() => el.remove(), lifetime);
+
+      return {
+        element: el,
+        setSubtext: (text) => {
+          if (!el.isConnected) return;
+          if (!metaEl) {
+            metaEl = document.createElement('small');
+            el.appendChild(metaEl);
+          }
+          metaEl.textContent = String(text || '');
+        },
+      };
+    }
+
+    let rateLimitInterval = null;
+    function showRateLimitCountdown(retryAfterSeconds) {
+      if (rateLimitInterval) clearInterval(rateLimitInterval);
+      const retrySeconds = Math.max(1, Number(retryAfterSeconds) || 5);
+      const toast = pushToast('Rate limit reached — pausing chat', 'warn', (retrySeconds + 2) * 1000, `Retry available in ${retrySeconds}s`);
+      if (!toast) return;
+      let remaining = retrySeconds;
+      rateLimitInterval = setInterval(() => {
+        remaining = Math.max(0, remaining - 1);
+        toast.setSubtext(`Retry available in ${remaining}s`);
+        if (remaining <= 0) {
+          clearInterval(rateLimitInterval);
+          toast.setSubtext('Retry now');
+        }
+      }, 1000);
+    }
+
+    function toastBacklogLoaded() {
+      const preset = presetLabel(presetSelect?.value || '');
+      const hardware = hardwareSelect?.options[hardwareSelect.selectedIndex]?.text || hardwareSelect?.value || 'default';
+      pushToast(`Loaded archived turns for ${preset} @ ${hardware}`, 'info', 3600);
+    }
+
+    // --------------------------------------------
     // Chat: safe rendering (no innerHTML)
     // --------------------------------------------
+    function setChatStatus(text, state = 'info') {
+      if (!agentChatStatus) return;
+      agentChatStatus.textContent = text;
+      agentChatStatus.dataset.state = state;
+    }
+
+    function chatBacklogKey() {
+      const preset = presetSelect?.value || 'default';
+      const hardware = hardwareSelect?.value || 'default';
+      return `synqc_agent_backlog_${preset}_${hardware}`;
+    }
+
+    function persistChatOverflow(entry) {
+      if (!entry || !entry.text) return;
+      try {
+        const key = chatBacklogKey();
+        const existing = JSON.parse(localStorage.getItem(key) || '[]');
+        existing.push(entry);
+        while (existing.length > CHAT_BACKLOG_LIMIT) existing.shift();
+        localStorage.setItem(key, JSON.stringify(existing));
+        if (agentBacklogDrawer && agentBacklogDrawer.style.display !== 'none') {
+          renderChatBacklog();
+        }
+      } catch (_) { /* ignore persistence failures */ }
+    }
+
+    function loadChatBacklogEntries() {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(chatBacklogKey()) || '[]');
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (_) {
+        return [];
+      }
+    }
+
+    function renderChatBacklog() {
+      if (!agentBacklogList) return;
+      agentBacklogList.textContent = '';
+      const entries = loadChatBacklogEntries();
+      if (!entries.length) {
+        const empty = document.createElement('div');
+        empty.className = 'panel-sub';
+        empty.textContent = 'No archived turns yet for this setup.';
+        agentBacklogList.appendChild(empty);
+        return;
+      }
+      entries.forEach(({ role, text, ts }) => {
+        const div = document.createElement('div');
+        div.className = 'msg ' + (role === 'user' ? 'msg-user' : 'msg-agent');
+
+        const label = document.createElement('strong');
+        label.textContent = role === 'user' ? 'You:' : 'SynQc Guide:';
+        const stamp = ts ? ` (${new Date(ts).toLocaleTimeString()})` : '';
+
+        div.appendChild(label);
+        div.appendChild(document.createTextNode(stamp + ' '));
+        div.appendChild(document.createTextNode(String(text || '')));
+
+        agentBacklogList.appendChild(div);
+      });
+    }
+
+    function pruneChatLog() {
+      while (chatPanel && chatPanel.childElementCount > CHAT_MAX_VISIBLE) {
+        const first = chatPanel.firstElementChild;
+        if (!first) break;
+        const raw = first.textContent || '';
+        const role = first.classList.contains('msg-user') ? 'user' : 'assistant';
+        const cleaned = raw.replace(/^\s*(SynQc Guide:|You:)\s*/i, '').trim();
+        persistChatOverflow({ role, text: cleaned, ts: Date.now() });
+        chatPanel.removeChild(first);
+      }
+    }
+
     function appendMessage(text, who) {
       const div = document.createElement('div');
       div.className = 'msg ' + (who === 'user' ? 'msg-user' : 'msg-agent');
@@ -4646,6 +4913,22 @@
 
       chatPanel.appendChild(div);
       chatPanel.scrollTop = chatPanel.scrollHeight;
+      pruneChatLog();
+    }
+
+    function toggleBacklogDrawer(force) {
+      if (!agentBacklogDrawer || !agentBacklogBtn) return;
+      const isHidden = agentBacklogDrawer.style.display === 'none' || agentBacklogDrawer.style.display === '';
+      const shouldShow = typeof force === 'boolean' ? force : isHidden;
+      if (shouldShow) {
+        renderChatBacklog();
+        agentBacklogDrawer.style.display = 'flex';
+        agentBacklogBtn.textContent = 'Hide archived';
+        toastBacklogLoaded();
+      } else {
+        agentBacklogDrawer.style.display = 'none';
+        agentBacklogBtn.textContent = 'Load archived';
+      }
     }
 
       function interpretIntent(msg) {
@@ -4666,32 +4949,74 @@
           scenePresetLabel.textContent = 'Latency Characterization';
           return 'I will prepare a Latency Characterization bundle with low-shot DPD probes to measure ' +
                  'end-to-end and backend-only delay.';
+        }
+        if (lower.includes('compare') || lower.includes('backend')) {
+          presetSelect.value = 'backend_compare';
+          scenePresetLabel.textContent = 'Backend A/B Comparison';
+          return 'I will set up a backend comparison run: your reference experiment will be replayed on two ' +
+                 'backends so we can compare fidelity and latency directly.';
+        }
+        if (lower.includes('example') || lower.includes('demo')) {
+          presetSelect.value = 'dpd_demo';
+          scenePresetLabel.textContent = 'Guided SynQc DPD Example';
+          return 'I will walk you through a guided SynQc Drive–Probe–Drive example on a local simulator, ' +
+                 'explaining each step as we go.';
+        }
+        return 'I have recorded your goal. Use the Setup tab to pick the closest preset (Health, Latency, ' +
+               'Backend Compare, or DPD Demo) and I will adapt it to your backend and constraints.';
       }
-      if (lower.includes('compare') || lower.includes('backend')) {
-        presetSelect.value = 'backend_compare';
-        scenePresetLabel.textContent = 'Backend A/B Comparison';
-        return 'I will set up a backend comparison run: your reference experiment will be replayed on two ' +
-               'backends so we can compare fidelity and latency directly.';
-      }
-      if (lower.includes('example') || lower.includes('demo')) {
-        presetSelect.value = 'dpd_demo';
-        scenePresetLabel.textContent = 'Guided SynQc DPD Example';
-        return 'I will walk you through a guided SynQc Drive–Probe–Drive example on a local simulator, ' +
-               'explaining each step as we go.';
-      }
-      return 'I have recorded your goal. Use the Setup tab to pick the closest preset (Health, Latency, ' +
-             'Backend Compare, or DPD Demo) and I will adapt it to your backend and constraints.';
+
+      async function fetchAgentReply(text) {
+        const payload = {
+          prompt: text,
+          history: agentChatHistory.slice(-6),
+          preset: presetSelect?.value || null,
+          hardware: hardwareSelect?.value || null,
+          mode: currentMode,
+        };
+      const res = await apiPost('/agent/chat', payload);
+      return res?.reply || interpretIntent(text);
     }
 
-    agentSend.addEventListener('click', () => {
-      const text = agentInput.value.trim();
-      if (!text) return;
-      appendMessage(text, 'user');
-      agentInput.value = '';
-      const reply = interpretIntent(text);
-      appendMessage(reply, 'agent');
-      updateInterpretationText();
-    });
+    if (agentBacklogBtn) {
+      agentBacklogBtn.addEventListener('click', () => toggleBacklogDrawer());
+    }
+
+      agentSend.addEventListener('click', async () => {
+        const text = agentInput.value.trim();
+        if (!text || agentSend.disabled) return;
+        appendMessage(text, 'user');
+        agentChatHistory.push({ role: 'user', content: text });
+        agentInput.value = '';
+        agentSend.disabled = true;
+        setChatStatus('Contacting GPT-4.0 mini…');
+        try {
+          const reply = await fetchAgentReply(text);
+          agentChatHistory.push({ role: 'assistant', content: reply });
+          appendMessage(reply, 'agent');
+          setChatStatus('Assistant ready.');
+        } catch (err) {
+          const payload = err?.response || {};
+          const isRateLimited = (payload.error_code || '').includes('RATE_LIMIT') || /429/.test(err?.message || '');
+          if (isRateLimited) {
+            const msg = payload.error_message || 'Rate limit reached — please retry in a few seconds.';
+            const hint = payload.action_hint ? ` ${payload.action_hint}` : '';
+            const statusText = `${msg}${hint}`.trim();
+            agentChatHistory.push({ role: 'assistant', content: statusText });
+            appendMessage(statusText, 'agent');
+            setChatStatus('Assistant paused due to rate limiting.', 'warn');
+            showRateLimitCountdown(payload?.error_detail?.retry_after_seconds);
+          } else {
+            const fallback = interpretIntent(text);
+            agentChatHistory.push({ role: 'assistant', content: fallback });
+            appendMessage(fallback, 'agent');
+            setChatStatus('Assistant offline — using preset heuristic.', 'warn');
+          }
+        } finally {
+          agentSend.disabled = false;
+          updateInterpretationText();
+        }
+      });
 
     agentInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') agentSend.click();
@@ -4710,12 +5035,14 @@
       sceneHardwareLabel.textContent = hardwareSelect.options[hardwareSelect.selectedIndex]?.text || hardwareSelect.value;
       updateHardwareCapabilityHint();
       updateInterpretationText();
+      if (agentBacklogDrawer && agentBacklogDrawer.style.display !== 'none') renderChatBacklog();
     });
 
     presetSelect.addEventListener('change', () => {
       const val = presetSelect.value;
       scenePresetLabel.textContent = presetLabel(val);
       updateInterpretationText();
+      if (agentBacklogDrawer && agentBacklogDrawer.style.display !== 'none') renderChatBacklog();
     });
 
     if (neuralWeb) {
