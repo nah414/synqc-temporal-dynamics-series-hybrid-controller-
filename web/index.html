@@ -345,6 +345,7 @@
     }
       .agent-chat-log {
         flex: 0 0 260px;
+        height: 260px;
         border-radius: 14px;
         background: rgba(8,10,30,0.96);
         border: 1px solid var(--border-subtle);
@@ -422,6 +423,18 @@
     .agent-backlog-list { display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.76rem; }
 
     .agent-backlog .msg strong { color: var(--text-main); }
+
+    .agent-body.is-setup-mode .agent-chat-log,
+    .agent-body.is-setup-mode .agent-backlog-controls,
+    .agent-body.is-setup-mode .agent-backlog,
+    .agent-body.is-setup-mode .agent-input-row {
+      display: none !important;
+      pointer-events: none;
+    }
+
+    .agent-body.is-setup-mode .agent-setup {
+      display: flex !important;
+    }
 
     .toast-stack {
       position: fixed;
@@ -2218,6 +2231,8 @@
     // DOM references
     // --------------------------------------------
     const agentTabs = document.querySelectorAll('.agent-tabs button');
+    const agentPanel = document.querySelector('.panel-agent');
+    const agentBody = document.querySelector('.panel-agent .agent-body');
     const chatPanel = document.getElementById('agentChatLog');
     const setupPanel = document.getElementById('agentSetupPanel');
     const agentInput = document.getElementById('agentInput');
@@ -2263,6 +2278,7 @@
           btn.classList.add('active');
           const tab = btn.getAttribute('data-tab');
           const showChat = tab === 'chat';
+          if (agentBody) agentBody.classList.toggle('is-setup-mode', !showChat);
           chatPanel.style.display = showChat ? 'flex' : 'none';
           setupPanel.style.display = showChat ? 'none' : 'flex';
           if (agentBacklogControls) agentBacklogControls.style.display = showChat ? 'flex' : 'none';
@@ -5028,66 +5044,87 @@
       return res?.reply || interpretIntent(text);
     }
 
-    if (agentBacklogBtn) {
-      agentBacklogBtn.addEventListener('click', () => toggleBacklogDrawer());
-    }
+    if (agentPanel) {
+      agentPanel.addEventListener('click', (event) => {
+        const backlogTrigger = event.target.closest('#agentBacklogBtn');
+        if (backlogTrigger) {
+          toggleBacklogDrawer();
+          return;
+        }
 
-    if (agentClearBtn) {
-      agentClearBtn.addEventListener('click', () => {
-        resetChatLog();
-        setChatStatus('Assistant ready.');
-      });
-    }
-
-      agentSend.addEventListener('click', async () => {
-        const text = agentInput.value.trim();
-        if (!text || agentSend.disabled || agentSending) return;
-        agentSending = true;
-        agentSend.disabled = true;
-        appendMessage(text, 'user');
-        agentChatHistory.push({ role: 'user', content: text });
-        agentInput.value = '';
-        setChatStatus('Contacting GPT-4.0 mini…');
-        try {
-          const reply = await fetchAgentReply(text);
-          agentChatHistory.push({ role: 'assistant', content: reply });
-          appendMessage(reply, 'agent');
+        const clearTrigger = event.target.closest('#agentClearBtn');
+        if (clearTrigger) {
+          resetChatLog();
           setChatStatus('Assistant ready.');
-        } catch (err) {
-          const payload = err?.response || {};
-          const isRateLimited = (payload.error_code || '').includes('RATE_LIMIT') || /429/.test(err?.message || '');
-          if (isRateLimited) {
-            const msg = payload.error_message || 'Rate limit reached — please retry in a few seconds.';
-            const hint = payload.action_hint ? ` ${payload.action_hint}` : '';
-            const statusText = `${msg}${hint}`.trim();
-            agentChatHistory.push({ role: 'assistant', content: statusText });
-            appendMessage(statusText, 'agent');
-            setChatStatus('Assistant paused due to rate limiting.', 'warn');
-            showRateLimitCountdown(payload?.error_detail?.retry_after_seconds);
-          } else {
-            const fallback = interpretIntent(text);
-            agentChatHistory.push({ role: 'assistant', content: fallback });
-            appendMessage(fallback, 'agent');
-            setChatStatus('Assistant offline — using preset heuristic.', 'warn');
-          }
-        } finally {
-          agentSend.disabled = false;
-          agentSending = false;
-          updateInterpretationText();
         }
       });
+    }
 
-    agentInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') agentSend.click();
-    });
+    async function handleAgentSend() {
+      if (!agentInput || !agentSend || !chatPanel) return;
+      const text = agentInput.value.trim();
+      if (!text || agentSend.disabled || agentSending) return;
+      agentSending = true;
+      agentSend.disabled = true;
+      agentInput.disabled = true;
+
+      const pendingText = text;
+      agentInput.value = '';
+      appendMessage(pendingText, 'user');
+      agentChatHistory.push({ role: 'user', content: pendingText });
+      setChatStatus('Contacting GPT-4.0 mini…');
+
+      try {
+        const reply = await fetchAgentReply(pendingText);
+        agentChatHistory.push({ role: 'assistant', content: reply });
+        appendMessage(reply, 'agent');
+        setChatStatus('Assistant ready.');
+      } catch (err) {
+        const payload = err?.response || {};
+        const isRateLimited = (payload.error_code || '').includes('RATE_LIMIT') || /429/.test(err?.message || '');
+        if (isRateLimited) {
+          const msg = payload.error_message || 'Rate limit reached — please retry in a few seconds.';
+          const hint = payload.action_hint ? ` ${payload.action_hint}` : '';
+          const statusText = `${msg}${hint}`.trim();
+          agentChatHistory.push({ role: 'assistant', content: statusText });
+          appendMessage(statusText, 'agent');
+          setChatStatus('Assistant paused due to rate limiting.', 'warn');
+          showRateLimitCountdown(payload?.error_detail?.retry_after_seconds);
+        } else {
+          const fallback = interpretIntent(pendingText);
+          agentChatHistory.push({ role: 'assistant', content: fallback });
+          appendMessage(fallback, 'agent');
+          setChatStatus('Assistant offline — using preset heuristic.', 'warn');
+        }
+      } finally {
+        agentSend.disabled = false;
+        agentInput.disabled = false;
+        agentSending = false;
+        updateInterpretationText();
+        agentInput.focus();
+      }
+    }
+
+    if (agentSend) agentSend.addEventListener('click', handleAgentSend);
+
+    if (agentInput) {
+      agentInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          if (!agentSending && !agentSend?.disabled) handleAgentSend();
+        }
+      });
+    }
 
     const DEBUG_UI = String(window.DEBUG_UI || '').toLowerCase() === 'true';
     if (DEBUG_UI) {
       document.addEventListener('click', (event) => {
-        const targetBtn = event.target.closest('button');
+        const targetBtn = event.target.closest('button, [role="button"], .icon-button');
         if (targetBtn) {
-          const label = targetBtn.textContent.trim() || targetBtn.getAttribute('aria-label') || targetBtn.id || '[unnamed-button]';
-          console.debug('[UI debug] icon/button click:', label);
+          const label = targetBtn.getAttribute('aria-label') || targetBtn.textContent.trim() || '[unnamed-button]';
+          const id = targetBtn.id ? `#${targetBtn.id}` : '';
+          const classes = targetBtn.classList?.length ? `.${Array.from(targetBtn.classList).join('.')}` : '';
+          console.debug('[UI debug] icon/button click:', label, id + classes);
         }
       }, { capture: true });
     }
