@@ -173,6 +173,17 @@ py -m http.server 8080
 Then open:
 - `http://127.0.0.1:8080/`
 
+### Frontend smoke check (Grover console layout)
+
+Run a lightweight Playwright check to make sure the Grover console stays within its fixed height and icon buttons remain clickable:
+
+```
+cd web
+npm test -- --grep "Grover console layout smoke check"
+```
+
+The script opens `web/index.html` with stubbed API responses, clicks the backlog and clear controls, sends five chat messages, and asserts the chat log scrolls internally without expanding the page height. If a Chromium binary is not available locally, the test auto-skips.
+
 ### 3) (Optional) Point the UI at a different backend URL
 
 If your backend isn’t on `localhost:8001`, open:

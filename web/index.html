@@ -329,11 +329,23 @@
       background: linear-gradient(to right, #6ae5ff, #ffdd6e);
       color: #050412; font-weight: 600;
     }
+    .agent-header-actions { display: flex; align-items: center; gap: 0.35rem; }
+    .agent-clear-btn {
+      border: 1px solid var(--border-subtle);
+      background: rgba(8, 10, 30, 0.9);
+      color: var(--text-soft);
+      border-radius: 10px;
+      padding: 0.28rem 0.55rem;
+      font-size: 0.72rem;
+      cursor: pointer;
+    }
+    .agent-clear-btn:hover { color: var(--text-main); border-color: var(--accent); }
     .agent-body {
       flex: 1; display: flex; flex-direction: column; gap: 0.6rem; min-height: 220px;
     }
       .agent-chat-log {
-        flex: 1; border-radius: 14px;
+        flex: 0 0 260px;
+        border-radius: 14px;
         background: rgba(8,10,30,0.96);
         border: 1px solid var(--border-subtle);
         padding: 0.6rem 0.65rem;
@@ -341,6 +353,7 @@
         display: flex; flex-direction: column; gap: 0.4rem;
         overflow-y: auto;
         max-height: 260px;
+        min-height: 200px;
       }
     .msg { max-width: 100%; line-height: 1.35; white-space: pre-wrap; word-break: break-word; }
     .msg-user { color: #6ae5ff; }
@@ -395,6 +408,15 @@
       gap: 0.35rem;
       max-height: 150px;
       overflow: auto;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.15s ease;
+    }
+
+    .agent-backlog.is-open {
+      display: flex;
+      pointer-events: auto;
+      opacity: 1;
     }
 
     .agent-backlog-list { display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.76rem; }
@@ -1355,9 +1377,12 @@
             <div class="panel-title">SynQc Guide</div>
             <div class="panel-sub">Agent & experiment setup</div>
           </div>
-          <div class="agent-tabs">
-            <button class="active" data-tab="chat">Agent</button>
-            <button data-tab="setup">Setup</button>
+          <div class="agent-header-actions">
+            <div class="agent-tabs">
+              <button class="active" data-tab="chat">Agent</button>
+              <button data-tab="setup">Setup</button>
+            </div>
+            <button class="agent-clear-btn" id="agentClearBtn" type="button">Clear</button>
           </div>
         </div>
 
@@ -1377,7 +1402,7 @@
             </div>
           </div>
 
-          <div class="agent-backlog-controls">
+          <div class="agent-backlog-controls" id="agentBacklogControls">
             <div class="panel-sub" id="agentChatStatus">Assistant ready.</div>
             <button class="agent-backlog-btn" id="agentBacklogBtn" type="button">Load archived</button>
           </div>
@@ -1387,7 +1412,7 @@
             <div class="agent-backlog-list" id="agentBacklogList"></div>
           </div>
 
-          <div class="agent-input-row">
+          <div class="agent-input-row" id="agentInputRow">
             <input id="agentInput" type="text" placeholder="Describe your goal, e.g. 'Check coherence on IBM simulator'…" />
             <button id="agentSend">Send</button>
           </div>
@@ -2190,36 +2215,20 @@
     })();
 
     // --------------------------------------------
-    // Agent tabs (Agent / Setup)
+    // DOM references
     // --------------------------------------------
     const agentTabs = document.querySelectorAll('.agent-tabs button');
     const chatPanel = document.getElementById('agentChatLog');
     const setupPanel = document.getElementById('agentSetupPanel');
-
-    agentTabs.forEach(btn => {
-      btn.addEventListener('click', () => {
-        agentTabs.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        const tab = btn.getAttribute('data-tab');
-        if (tab === 'chat') {
-          chatPanel.style.display = 'flex';
-          setupPanel.style.display = 'none';
-        } else {
-          chatPanel.style.display = 'flex';
-          setupPanel.style.display = 'flex';
-        }
-      });
-    });
-
-    // --------------------------------------------
-    // DOM references
-    // --------------------------------------------
     const agentInput = document.getElementById('agentInput');
     const agentSend = document.getElementById('agentSend');
     const agentChatStatus = document.getElementById('agentChatStatus');
+    const agentBacklogControls = document.getElementById('agentBacklogControls');
     const agentBacklogDrawer = document.getElementById('agentBacklogDrawer');
     const agentBacklogList = document.getElementById('agentBacklogList');
     const agentBacklogBtn = document.getElementById('agentBacklogBtn');
+    const agentInputRow = document.getElementById('agentInputRow');
+    if (agentBacklogDrawer) agentBacklogDrawer.dataset.open = 'false';
     const toastStack = document.getElementById('toastStack');
 
     const scenePresetLabel = document.getElementById('scenePresetLabel');
@@ -2242,6 +2251,34 @@
       const runAlert = document.getElementById('runAlert');
       const runAlertText = runAlert?.querySelector('.alert-text');
       const urlKeyWarning = document.getElementById('urlKeyWarning');
+
+    const agentClearBtn = document.getElementById('agentClearBtn');
+
+    // --------------------------------------------
+    // Agent tabs (Agent / Setup)
+    // --------------------------------------------
+      agentTabs.forEach(btn => {
+        btn.addEventListener('click', () => {
+          agentTabs.forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          const tab = btn.getAttribute('data-tab');
+          const showChat = tab === 'chat';
+          chatPanel.style.display = showChat ? 'flex' : 'none';
+          setupPanel.style.display = showChat ? 'none' : 'flex';
+          if (agentBacklogControls) agentBacklogControls.style.display = showChat ? 'flex' : 'none';
+          if (agentBacklogDrawer) {
+            if (!showChat) {
+              agentBacklogDrawer.dataset.open = 'false';
+              agentBacklogDrawer.classList.remove('is-open');
+              agentBacklogDrawer.style.display = 'none';
+            } else {
+              toggleBacklogDrawer(agentBacklogDrawer.dataset.open === 'true');
+            }
+          }
+          if (agentBacklogBtn) agentBacklogBtn.disabled = !showChat;
+          if (agentInputRow) agentInputRow.style.display = showChat ? 'flex' : 'none';
+        });
+      });
 
     // Console history
     const historyBody = document.getElementById('historyBody');
@@ -2338,6 +2375,8 @@
     const CHAT_MAX_VISIBLE = 3;
     const CHAT_BACKLOG_LIMIT = 25;
     const agentChatHistory = [];
+    const initialChatSeed = chatPanel ? Array.from(chatPanel.children).map(node => node.cloneNode(true)) : [];
+    let agentSending = false;
 
     // --------------------------------------------
     // Backend wiring
@@ -4900,6 +4939,14 @@
       }
     }
 
+    function resetChatLog() {
+      if (!chatPanel) return;
+      chatPanel.innerHTML = '';
+      initialChatSeed.forEach(node => chatPanel.appendChild(node.cloneNode(true)));
+      agentChatHistory.length = 0;
+      chatPanel.scrollTop = 0;
+    }
+
     function appendMessage(text, who) {
       const div = document.createElement('div');
       div.className = 'msg ' + (who === 'user' ? 'msg-user' : 'msg-agent');
@@ -4918,15 +4965,18 @@
 
     function toggleBacklogDrawer(force) {
       if (!agentBacklogDrawer || !agentBacklogBtn) return;
-      const isHidden = agentBacklogDrawer.style.display === 'none' || agentBacklogDrawer.style.display === '';
-      const shouldShow = typeof force === 'boolean' ? force : isHidden;
+      const currentState = agentBacklogDrawer.dataset.open === 'true';
+      const shouldShow = typeof force === 'boolean' ? force : !currentState;
+      agentBacklogDrawer.dataset.open = shouldShow ? 'true' : 'false';
       if (shouldShow) {
         renderChatBacklog();
         agentBacklogDrawer.style.display = 'flex';
+        agentBacklogDrawer.classList.add('is-open');
         agentBacklogBtn.textContent = 'Hide archived';
         toastBacklogLoaded();
       } else {
         agentBacklogDrawer.style.display = 'none';
+        agentBacklogDrawer.classList.remove('is-open');
         agentBacklogBtn.textContent = 'Load archived';
       }
     }
@@ -4982,13 +5032,21 @@
       agentBacklogBtn.addEventListener('click', () => toggleBacklogDrawer());
     }
 
+    if (agentClearBtn) {
+      agentClearBtn.addEventListener('click', () => {
+        resetChatLog();
+        setChatStatus('Assistant ready.');
+      });
+    }
+
       agentSend.addEventListener('click', async () => {
         const text = agentInput.value.trim();
-        if (!text || agentSend.disabled) return;
+        if (!text || agentSend.disabled || agentSending) return;
+        agentSending = true;
+        agentSend.disabled = true;
         appendMessage(text, 'user');
         agentChatHistory.push({ role: 'user', content: text });
         agentInput.value = '';
-        agentSend.disabled = true;
         setChatStatus('Contacting GPT-4.0 mini…');
         try {
           const reply = await fetchAgentReply(text);
@@ -5014,6 +5072,7 @@
           }
         } finally {
           agentSend.disabled = false;
+          agentSending = false;
           updateInterpretationText();
         }
       });
@@ -5021,6 +5080,17 @@
     agentInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') agentSend.click();
     });
+
+    const DEBUG_UI = String(window.DEBUG_UI || '').toLowerCase() === 'true';
+    if (DEBUG_UI) {
+      document.addEventListener('click', (event) => {
+        const targetBtn = event.target.closest('button');
+        if (targetBtn) {
+          const label = targetBtn.textContent.trim() || targetBtn.getAttribute('aria-label') || targetBtn.id || '[unnamed-button]';
+          console.debug('[UI debug] icon/button click:', label);
+        }
+      }, { capture: true });
+    }
 
     wireControlInput(driveBiasInput, driveBiasValue, v => `${Number(v).toFixed(2)}x`);
     wireControlInput(probeWindowInput, probeWindowValue, fmtNs);
