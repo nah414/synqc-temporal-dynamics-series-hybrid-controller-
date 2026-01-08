@@ -1,0 +1,43 @@
+services:
+  egress-proxy:
+    image: ubuntu/squid:latest
+    container_name: synqc-egress-proxy
+    restart: unless-stopped
+    ports:
+      - "3128:3128"
+    volumes:
+      - ./sandbox/proxy/squid.conf:/etc/squid/squid.conf:ro
+
+  agent-grover:
+    build:
+      context: ./agents/grover
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      SYNQC_MODE: local
+      HTTP_PROXY: http://egress-proxy:3128
+      HTTPS_PROXY: http://egress-proxy:3128
+      NO_PROXY: localhost,127.0.0.1,redis,api,shor,web,egress-proxy
+    ports:
+      - "9001:9001"
+
+  worker:
+    environment:
+      HTTP_PROXY: http://egress-proxy:3128
+      HTTPS_PROXY: http://egress-proxy:3128
+      NO_PROXY: localhost,127.0.0.1,redis,api,shor,web,agent-grover,egress-proxy
+
+
+  api:
+    environment:
+      HTTP_PROXY: http://egress-proxy:3128
+      HTTPS_PROXY: http://egress-proxy:3128
+      NO_PROXY: localhost,127.0.0.1,redis,api,shor,web,agent-grover,egress-proxy
+      SYNQC_AGENT_SANDBOX_ENABLE: "true"
+      SYNQC_AGENT_GROVER_URL: "http://agent-grover:9001"
+      SYNQC_STORAGE_MODE: "prometheus"
+      SYNQC_REDIS_BENCH_STREAM: "synqc:bench_events"
+      SYNQC_METRICS_SERVER_ENABLE: "false"
+
+
+

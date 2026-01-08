@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
+<head><link rel="icon" href="/favicon.ico" />
+
   <meta charset="UTF-8" />
   <title>SynQc TDS — Temporal Dynamics Console v0.4</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -3516,7 +3517,10 @@
 
       updateShorWorkspaceSnapshot();
       startShorRunPolling();
-      startShorLiveChannel();
+      // Local demo: Shor backend does not implement live streaming endpoints.
+// Shor API supports /api/shor/runs and /api/shor/runs/{run_id} only.
+console.info("Shor live channel disabled in local mode.");
+
     }
 
     function fmtTimeFromEpochSeconds(epochSec) {

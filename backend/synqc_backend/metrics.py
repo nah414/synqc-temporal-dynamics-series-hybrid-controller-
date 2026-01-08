@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import threading
 from time import monotonic
 from typing import Callable, Optional
@@ -155,11 +156,16 @@ class MetricsExporter:
         if self._thread and self._thread.is_alive():
             return
 
+
         try:
-            start_http_server(self._port, addr=self._addr, registry=self._registry)
-            logger.info(
-                "Started Prometheus metrics server", extra={"port": self._port}
-            )
+            if os.getenv("SYNQC_METRICS_SERVER_ENABLE", "false").lower() in {"1", "true", "yes"}:
+                # Always bind to 0.0.0.0 for Docker compatibility
+                start_http_server(self._port, addr="0.0.0.0", registry=self._registry)
+                logger.info(
+                    "Started Prometheus metrics server on 0.0.0.0", extra={"port": self._port}
+                )
+            else:
+                logger.info("Metrics server disabled (using /metrics endpoint).")
         except Exception as exc:  # noqa: BLE001 - we must surface startup failures
             logger.error("Failed to start metrics server", exc_info=exc)
             return
@@ -218,7 +224,15 @@ class MetricsExporter:
         summary = self._budget_tracker.health_summary()
         backend = summary.get("backend", "unknown")
 
-        connected = 1.0 if (backend == "memory" or summary.get("redis_connected")) else 0.0
+        redis_flag = summary.get("redis_connected")
+        if redis_flag is None:
+            redis_flag = summary.get("redis_ok")
+        if redis_flag is None:
+            redis_flag = summary.get("ok")
+        if redis_flag is None:
+            redis_flag = summary.get("connected")
+
+        connected = 1.0 if backend == "memory" else (1.0 if redis_flag else 0.0)
         session_keys = float(summary.get("session_keys", 0) or 0)
 
         self._redis_connected.labels(backend=backend).set(connected)

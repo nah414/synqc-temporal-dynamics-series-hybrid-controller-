@@ -1,0 +1,12 @@
+version: 1
+storage:
+  mode: sqlite  # sqlite | redis | prometheus
+
+  sqlite:
+    path: ./sandbox_data/sandbox_events.sqlite3
+
+  redis:
+    url: ""   # e.g. rediss://:<password>@<host>:<port>/0
+
+  prometheus:
+    pushgateway_url: ""  # optional; if empty, expose /metrics only

@@ -19,6 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from synqc_backend.consumer_api import router as consumer_router
+from prometheus_client import REGISTRY, make_asgi_app
 from synqc_backend.middleware import add_default_middlewares
 from synqc_backend.orchestration import get_event_store
 
@@ -199,6 +200,7 @@ def _seed_demo_runs() -> None:
 _seed_demo_runs()
 
 docs_enabled = settings.env != "prod"
+
 app = FastAPI(
     title="SynQc Temporal Dynamics Series Backend",
     description=(
@@ -208,6 +210,9 @@ app = FastAPI(
     redoc_url="/redoc" if docs_enabled else None,
     openapi_url="/openapi.json" if docs_enabled else None,
 )
+
+# Prometheus metrics endpoint (single-process safe; no extra port binding)
+app.mount("/metrics", make_asgi_app(REGISTRY))
 
 add_default_middlewares(app)
 
@@ -405,8 +410,7 @@ async def _security_headers(request: Request, call_next):
     )
     response.headers.setdefault(
         "Content-Security-Policy",
-        "default-src 'self'; connect-src 'self' https:; img-src 'self' data:; "
-        "style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'",
+        "default-src 'self'; connect-src 'self' https:; img-src 'self' data: https://fastapi.tiangolo.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; font-src 'self' data: https://cdn.jsdelivr.net",
     )
     if settings.env == "prod":
         response.headers.setdefault("Strict-Transport-Security", "max-age=63072000; includeSubDomains")

@@ -64,7 +64,7 @@ class SynQcSettings(BaseSettings):
     # Metrics / observability
     enable_metrics: bool = Field(default=True)
     metrics_port: int = Field(default=9000, ge=1, le=65535)
-    metrics_bind_address: str = Field(default="127.0.0.1")
+    metrics_bind_address: str = Field(default="0.0.0.0")
     metrics_collection_interval_seconds: int = Field(default=15, ge=5)
     metrics_use_shared_registry: bool = Field(
         default=False,
@@ -87,7 +87,7 @@ class SynQcSettings(BaseSettings):
         ),
     )
     metrics_worker_port: int = Field(default=9001, ge=1, le=65535)
-    metrics_worker_bind_address: str = Field(default="127.0.0.1")
+    metrics_worker_bind_address: str = Field(default="0.0.0.0")
     metrics_worker_use_shared_registry: bool = Field(
         default=False,
         description=(

@@ -1,0 +1,26 @@
+version: 1
+sandbox:
+  isolation_level: WORKSPACE   # FULL | WORKSPACE | INTEGRATED
+  network:
+    mode: PROXY_ALLOWLIST      # NONE | PROXY_ALLOWLIST
+    allowed_domains:
+      - github.com
+      - api.github.com
+      - raw.githubusercontent.com
+      - pypi.org
+      - files.pythonhosted.org
+      - wolfram.com
+      - qiskit.org
+  filesystem:
+    workspace_mount: /workspace
+    artifacts_mount: /artifacts
+    deny_paths:
+      - /workspace/.git
+      - /workspace/.venv
+      - /workspace/backend/.venv
+      - /workspace/backend/__pycache__
+    max_files_touched: 500
+  runtime:
+    max_seconds: 600
+    cpu_limit: "1.0"
+    mem_limit: "1024m"

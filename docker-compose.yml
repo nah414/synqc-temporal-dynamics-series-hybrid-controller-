@@ -3,6 +3,16 @@ version: "3.9"
 name: synqc-tds
 
 services:
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./docker/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+    ports:
+      - "9090:9090"
+    depends_on:
+      - api
   api:
     build:
       context: ./backend
@@ -18,26 +28,23 @@ services:
       UVICORN_WORKERS: ${UVICORN_WORKERS:-1}
       SYNQC_REDIS_URL: ${SYNQC_REDIS_URL:-redis://redis:6379/0}
       SYNQC_HEALTH_CACHE_TTL_SECONDS: ${SYNQC_HEALTH_CACHE_TTL_SECONDS:-3}
+        SYNQC_METRICS_COLLECTION_INTERVAL_SECONDS: "5"
       SYNQC_ALLOWED_ORIGINS: "*"
       SYNQC_CORS_ALLOW_CREDENTIALS: "false"
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+        SYNQC_METRICS_BIND_ADDRESS: "0.0.0.0"
+      SYNQC_METRICS_BIND_ADDRESS: "0.0.0.0"
     depends_on:
       redis:
         condition: service_healthy
       worker:
         condition: service_started
     healthcheck:
-      test:
-        [
-          "CMD",
-          "python",
-          "-c",
-          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health').read()",
-        ]
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=2); sys.exit(0)\" || exit 1"]
       interval: 10s
       timeout: 3s
-      retries: 5
-      start_period: 10s
+      retries: 10
+      start_period: 20s
     restart: unless-stopped
 
   worker:
@@ -50,6 +57,8 @@ services:
       SYNQC_HEALTH_CACHE_TTL_SECONDS: ${SYNQC_HEALTH_CACHE_TTL_SECONDS:-3}
       SYNQC_REQUIRE_API_KEY: "false"
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+        SYNQC_METRICS_WORKER_BIND_ADDRESS: "0.0.0.0"
+      SYNQC_METRICS_WORKER_BIND_ADDRESS: "0.0.0.0"
     depends_on:
       redis:
         condition: service_healthy
@@ -79,6 +88,33 @@ services:
       api:
         condition: service_healthy
     restart: unless-stopped
+
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: synqc-tds-prometheus-1
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+    volumes:
+      - ./docker/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    depends_on:
+      api:
+        condition: service_healthy
+
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./docker/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+    ports:
+      - "9090:9090"
+    depends_on:
+      api:
+        condition: service_healthy
 
   shor:
     build:

@@ -1,0 +1,20 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title>CORS Test - SynQc Backend</title>
+</head>
+<body>
+    <h1>Backend Connection Test</h1>
+    <div id="status">Testing...</div>
+    <script>
+        fetch('http://127.0.0.1:8001/health')
+            .then(r => r.json())
+            .then(d => {
+                document.getElementById('status').innerHTML = ' Connected! Data: ' + JSON.stringify(d);
+            })
+            .catch(e => {
+                document.getElementById('status').innerHTML = ' Failed: ' + e.message;
+            });
+    </script>
+</body>
+</html>
